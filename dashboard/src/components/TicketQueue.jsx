@@ -51,16 +51,19 @@ export default function TicketQueue({ tickets, newTicketIds, fixedDepartment }) 
   // Sort newest-first
   filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-  // Change ticket status
+  // Change ticket status via backend to trigger Telegram notifications
   async function handleStatusChange(ticketId, newStatus) {
-    const { error } = await supabase
-      .from('tickets')
-      .update({ status: newStatus, updated_at: new Date().toISOString() })
-      .eq('id', ticketId);
-
-    if (error) {
-      console.error('Error updating ticket status:', error);
-      alert('Failed to update ticket status. Please try again.');
+    try {
+      const response = await fetch(`http://localhost:3000/api/tickets/${ticketId}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (!response.ok) {
+        console.error('Failed to update status');
+      }
+    } catch (err) {
+      console.error('Error calling backend for status update:', err);
     }
   }
 

@@ -53,6 +53,15 @@ bot.onText(/\/status\s+(.+)/, async (msg, match) => {
   await handleStatusLookup(chatId, ticketNumber);
 });
 
+// ─── /feedback command ──────────────────────────────────────────────────────
+bot.onText(/\/feedback\s+([a-zA-Z]+-\d+)\s+(.+)/, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const ticketNumber = match[1].toUpperCase();
+  const feedback = match[2].trim();
+  
+  await saveCitizenFeedback(chatId, ticketNumber, feedback);
+});
+
 // ─── Callback query handler (button taps) ───────────────────────────────────
 bot.on('callback_query', async (query) => {
   const chatId = query.message.chat.id;
@@ -60,6 +69,11 @@ bot.on('callback_query', async (query) => {
 
   // Acknowledge the button tap to remove the loading spinner
   await bot.answerCallbackQuery(query.id);
+
+  if (action.startsWith('rate_')) {
+    await handleCitizenRating(chatId, action);
+    return;
+  }
 
   switch (action) {
     case 'emergency':
@@ -219,6 +233,12 @@ bot.on('message', async (msg) => {
     // Citizen is providing a ticket number
     clearState(chatId);
     await handleStatusLookup(chatId, msg.text.trim().toUpperCase());
+    return;
+  }
+
+  if (state.mode === 'awaiting_feedback') {
+    clearState(chatId);
+    await saveCitizenFeedback(chatId, state.ticketNumber, msg.text);
     return;
   }
 });
@@ -469,6 +489,48 @@ async function safeSendMessage(chatId, text, options = {}) {
   } catch (err) {
     console.error(`[Telegram] Failed to send message to chat ${chatId}:`, err.message);
   }
+}
+
+// ─── Rating and Feedback Handlers ───────────────────────────────────────────
+
+async function handleCitizenRating(chatId, action) {
+  // Expected action format: rate_5_GC-1001
+  const parts = action.split('_');
+  const rating = parseInt(parts[1], 10);
+  const ticketNumber = parts[2];
+
+  const { error } = await supabase
+    .from('tickets')
+    .update({ citizen_rating: rating, updated_at: new Date().toISOString() })
+    .ilike('ticket_number', ticketNumber.trim());
+
+  if (error) {
+    console.error('[Telegram] Failed to save rating:', error);
+    await safeSendMessage(chatId, '❌ Failed to save your rating. Please try again later.');
+    return;
+  }
+
+  // Await detailed feedback
+  setState(chatId, { mode: 'awaiting_feedback', ticketNumber });
+
+  await safeSendMessage(chatId, 
+    `Thank you for your ${rating}-star rating! ⭐\n\nIf you have any detailed feedback about the resolution, please type it below:`
+  );
+}
+
+async function saveCitizenFeedback(chatId, ticketNumber, feedback) {
+  const { error } = await supabase
+    .from('tickets')
+    .update({ citizen_feedback: feedback, updated_at: new Date().toISOString() })
+    .ilike('ticket_number', ticketNumber.trim());
+
+  if (error) {
+    console.error('[Telegram] Failed to save feedback:', error);
+    await safeSendMessage(chatId, '❌ Failed to save your feedback. Please try again later.');
+    return;
+  }
+
+  await safeSendMessage(chatId, '✅ Your feedback has been recorded. Thank you for helping us improve!');
 }
 
 module.exports = bot;

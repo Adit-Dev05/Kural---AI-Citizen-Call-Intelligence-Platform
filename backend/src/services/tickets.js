@@ -81,10 +81,34 @@ async function checkDuplicate(department, location) {
 async function createTicket(ticketData) {
   const ticketNumber = await generateTicketNumber();
 
+  let latitude = ticketData.latitude || null;
+  let longitude = ticketData.longitude || null;
+
+  // Attempt to geocode the location if not explicitly provided
+  if (!latitude && !longitude && ticketData.location && ticketData.location !== 'Not specified') {
+    try {
+      // Append Chennai context for better matches, since Kural is Chennai-focused in this demo
+      const query = encodeURIComponent(`${ticketData.location}, Chennai, Tamil Nadu, India`);
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`, {
+        headers: { 'User-Agent': 'Kural-Hackathon-App/1.0' }
+      });
+      const geoData = await response.json();
+      if (geoData && geoData.length > 0) {
+        latitude = parseFloat(geoData[0].lat);
+        longitude = parseFloat(geoData[0].lon);
+        console.log(`[Geocoding] Resolved "${ticketData.location}" to ${latitude}, ${longitude}`);
+      }
+    } catch (err) {
+      console.error('[Geocoding] Failed to fetch coordinates:', err.message);
+    }
+  }
+
   const { data, error } = await supabase
     .from('tickets')
     .insert({
       ticket_number: ticketNumber,
+      latitude,
+      longitude,
       ...ticketData,
     })
     .select()

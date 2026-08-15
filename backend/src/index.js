@@ -19,6 +19,7 @@ const bot = require('./telegram/bot');
 const triggerCallRouter = require('./routes/triggerCall');
 const bolnaWebhookRouter = require('./routes/bolnaWebhook');
 const summaryRouter = require('./routes/summary');
+const ticketsRouter = require('./routes/tickets');
 
 // Pass the bot instance to the Bolna webhook so it can send Telegram messages
 bolnaWebhookRouter.setBot(bot);
@@ -52,6 +53,7 @@ app.use('/webhook/bolna', bolnaWebhookRouter);
 // ─── Internal API ───────────────────────────────────────────────────────────
 app.use('/api', triggerCallRouter);
 app.use('/api/summary', summaryRouter);
+app.use('/api/tickets', ticketsRouter);
 
 // ─── Start server ───────────────────────────────────────────────────────────
 app.listen(PORT, async () => {

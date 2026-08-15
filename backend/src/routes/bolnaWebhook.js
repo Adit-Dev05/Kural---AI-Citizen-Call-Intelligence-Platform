@@ -95,8 +95,9 @@ router.post('/call-ended', async (req, res) => {
 async function processCallResult(callRequest, callStatus, transcript, recordingUrl) {
   const { telegram_chat_id, phone_number, caller_name, id: callRequestId } = callRequest;
 
-  // Ignore intermediate webhook statuses — wait for 'completed' or 'failed'
-  if (callStatus === 'call-disconnected' || callStatus === 'in-progress' || callStatus === 'queued') {
+  // Ignore intermediate webhook statuses — wait for 'completed' or a clear failure
+  const intermediateStatuses = ['initiated', 'ringing', 'in-progress', 'queued', 'answered', 'call-disconnected'];
+  if (intermediateStatuses.includes(callStatus)) {
     console.log(`[BolnaWebhook] Ignoring intermediate status: ${callStatus}`);
     return;
   }

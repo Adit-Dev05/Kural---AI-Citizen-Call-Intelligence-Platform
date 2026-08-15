@@ -14,6 +14,7 @@ import TicketQueue from './components/TicketQueue';
 import SLAAnalytics from './components/SLAAnalytics';
 import ExecutiveSummary from './components/ExecutiveSummary';
 import MapView from './components/MapView';
+import TrustScoreWidget from './components/TrustScoreWidget';
 
 export default function App() {
   const [tickets, setTickets] = useState([]);
@@ -147,7 +148,12 @@ function DashboardView({ tickets, newTicketIds, fixedDepartment }) {
   return (
     <>
       <ExecutiveSummary tickets={tickets} fixedDepartment={fixedDepartment} />
-      <MetricCards tickets={tickets} fixedDepartment={fixedDepartment} />
+      
+      <div className="dashboard-row-flex">
+        <TrustScoreWidget tickets={tickets} fixedDepartment={fixedDepartment} />
+        <MetricCards tickets={tickets} fixedDepartment={fixedDepartment} />
+      </div>
+
       <MapView tickets={displayTickets} />
       {!fixedDepartment && <SLAAnalytics tickets={tickets} />}
       <TicketQueue tickets={tickets} newTicketIds={newTicketIds} fixedDepartment={fixedDepartment} />

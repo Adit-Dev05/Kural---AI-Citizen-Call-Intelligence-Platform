@@ -16,10 +16,14 @@ export default function ExecutiveSummary({ tickets, fixedDepartment }) {
       try {
         const response = await fetch('http://localhost:3000/api/summary');
         const data = await response.json();
-        setSummary(data.summary);
+        if (!response.ok || data.error) {
+          setSummary('AI Summary is currently unavailable (API Error).');
+        } else {
+          setSummary(data.summary || 'No summary generated.');
+        }
       } catch (err) {
         console.error('Failed to fetch AI summary:', err);
-        setSummary('AI Summary is currently unavailable.');
+        setSummary('AI Summary is currently unavailable (Network Error).');
       } finally {
         setLoading(false);
       }
