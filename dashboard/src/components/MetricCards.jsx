@@ -7,22 +7,27 @@
 
 import React from 'react';
 
-export default function MetricCards({ tickets }) {
+export default function MetricCards({ tickets, fixedDepartment }) {
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
+  // Filter by department if fixed
+  const scopedTickets = fixedDepartment
+    ? tickets.filter(t => t.department === fixedDepartment)
+    : tickets;
+
   // Open tickets (not resolved)
-  const openCount = tickets.filter(
+  const openCount = scopedTickets.filter(
     (t) => t.status !== 'resolved' && !t.duplicate_of
   ).length;
 
   // Urgent tickets that are still open
-  const urgentCount = tickets.filter(
+  const urgentCount = scopedTickets.filter(
     (t) => t.urgency === 'urgent' && t.status !== 'resolved' && !t.duplicate_of
   ).length;
 
   // Average resolution time (for resolved tickets, in hours)
-  const resolvedTickets = tickets.filter((t) => t.status === 'resolved');
+  const resolvedTickets = scopedTickets.filter((t) => t.status === 'resolved');
   let avgResolutionTime = '—';
   if (resolvedTickets.length > 0) {
     const totalMs = resolvedTickets.reduce((sum, t) => {
@@ -41,7 +46,7 @@ export default function MetricCards({ tickets }) {
   }
 
   // Tickets filed today
-  const todayCount = tickets.filter(
+  const todayCount = scopedTickets.filter(
     (t) => new Date(t.created_at) >= todayStart && !t.duplicate_of
   ).length;
 

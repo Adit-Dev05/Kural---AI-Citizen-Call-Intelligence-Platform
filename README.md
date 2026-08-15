@@ -28,7 +28,7 @@ Go to [Supabase Dashboard](https://supabase.com/dashboard) → your project → 
 CREATE TABLE IF NOT EXISTS tickets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   ticket_number TEXT UNIQUE NOT NULL,
-  source TEXT NOT NULL CHECK (source IN ('call', 'text')),
+  source TEXT NOT NULL CHECK (source IN ('call', 'text', 'emergency')),
   caller_phone TEXT,
   caller_name TEXT,
   telegram_chat_id TEXT NOT NULL,
@@ -36,6 +36,9 @@ CREATE TABLE IF NOT EXISTS tickets (
   issue_type TEXT,
   department TEXT,
   location TEXT,
+  latitude FLOAT8,
+  longitude FLOAT8,
+  emergency_type TEXT,
   urgency TEXT CHECK (urgency IN ('low', 'medium', 'urgent')),
   sentiment TEXT CHECK (sentiment IN ('neutral', 'frustrated', 'angry')),
   summary TEXT,
@@ -172,6 +175,7 @@ In the [Bolna Dashboard](https://app.bolna.ai):
 | Roads & Infrastructure | Potholes, broken bridges, construction issues |
 | Health Services | Hospital complaints, disease outbreaks, ambulance |
 | Police | Crime reports, noise complaints, safety concerns |
+| Fire Department | Fire, gas leak, explosions, rescue |
 | General Grievance | Anything that doesn't fit the above categories |
 
 ## API Endpoints

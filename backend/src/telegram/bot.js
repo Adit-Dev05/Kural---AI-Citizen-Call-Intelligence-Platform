@@ -25,6 +25,7 @@ const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
 // ─── Inline Keyboard: Main Menu ─────────────────────────────────────────────
 const MAIN_MENU_KEYBOARD = {
   inline_keyboard: [
+    [{ text: '🚨 Emergency', callback_data: 'emergency' }],
     [{ text: '📞 Register via Call', callback_data: 'register_call' }],
     [{ text: '📝 Register via Text', callback_data: 'register_text' }],
     [{ text: '🔍 Check Status', callback_data: 'check_status' }],
@@ -61,6 +62,15 @@ bot.on('callback_query', async (query) => {
   await bot.answerCallbackQuery(query.id);
 
   switch (action) {
+    case 'emergency':
+      await handleEmergencyMenu(chatId);
+      break;
+
+    case 'emergency_ambulance':
+    case 'emergency_fire':
+    case 'emergency_gas_leak':
+      await handleEmergencyDispatch(chatId, action);
+      break;
     case 'register_call':
       await handleRegisterCall(chatId);
       break;
@@ -172,10 +182,21 @@ bot.on('contact', async (msg) => {
 
 // ─── Free-text message handler ──────────────────────────────────────────────
 bot.on('message', async (msg) => {
-  // Skip commands, contacts, and non-text messages — those are handled above
+  const chatId = msg.chat.id;
+
+  // Handle location messages
+  if (msg.location) {
+    const state = getState(chatId);
+    if (state && state.mode === 'awaiting_emergency_location') {
+      await handleEmergencyLocation(chatId, msg.location, state.emergency_type);
+      clearState(chatId);
+    }
+    return;
+  }
+
+  // Skip commands, contacts, and non-text messages
   if (!msg.text || msg.text.startsWith('/') || msg.contact) return;
 
-  const chatId = msg.chat.id;
   const state = getState(chatId);
 
   if (!state) {
@@ -203,6 +224,90 @@ bot.on('message', async (msg) => {
 });
 
 // ─── Flow handlers ──────────────────────────────────────────────────────────
+
+async function handleEmergencyMenu(chatId) {
+  clearState(chatId);
+  await safeSendMessage(chatId, '🚨 What type of emergency is this?', {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '🚑 Ambulance', callback_data: 'emergency_ambulance' }],
+        [{ text: '🔥 Fire', callback_data: 'emergency_fire' }],
+        [{ text: '⛽ Gas Leak', callback_data: 'emergency_gas_leak' }],
+      ]
+    }
+  });
+}
+
+async function handleEmergencyDispatch(chatId, action) {
+  const type = action.replace('emergency_', '');
+  setState(chatId, { mode: 'awaiting_emergency_location', emergency_type: type });
+
+  const textMap = {
+    ambulance: '🚑 Ambulance',
+    fire: '🔥 Fire',
+    gas_leak: '⛽ Gas Leak'
+  };
+
+  await safeSendMessage(chatId, 
+    `You selected ${textMap[type]}.\n\n` + 
+    `📍 Please share your exact location immediately so we can dispatch units.`, 
+    {
+      reply_markup: {
+        keyboard: [[{ text: '📍 Share Location', request_location: true }]],
+        resize_keyboard: true,
+        one_time_keyboard: true,
+      }
+    }
+  );
+}
+
+async function handleEmergencyLocation(chatId, location, emergencyType) {
+  const departmentMap = {
+    ambulance: 'Health Services',
+    fire: 'Fire Department',
+    gas_leak: 'Fire Department'
+  };
+
+  const summaryMap = {
+    ambulance: 'Emergency: Ambulance requested',
+    fire: 'Emergency: Fire reported',
+    gas_leak: 'Emergency: Gas leak reported'
+  };
+
+  const ticketData = {
+    source: 'emergency',
+    telegram_chat_id: String(chatId),
+    raw_transcript: null,
+    issue_type: emergencyType,
+    department: departmentMap[emergencyType],
+    location: null, // using lat/lng
+    latitude: location.latitude,
+    longitude: location.longitude,
+    emergency_type: emergencyType,
+    urgency: 'urgent',
+    sentiment: 'frustrated', // high stress
+    summary: summaryMap[emergencyType],
+    classified_by: 'rules', // bypassed AI
+    status: 'open',
+  };
+
+  try {
+    const ticket = await createTicket(ticketData);
+
+    await safeSendMessage(chatId,
+      `🚨 <b>${summaryMap[emergencyType]}</b>\n\n` +
+      `Ticket <b>${ticket.ticket_number}</b> dispatched immediately to ${ticketData.department}.\n` +
+      `Units are being routed to your coordinates.`,
+      { reply_markup: { remove_keyboard: true } }
+    );
+  } catch (err) {
+    console.error('[Telegram] Failed to create emergency ticket:', err);
+    await safeSendMessage(chatId,
+      `❌ We were unable to register your emergency ticket right now due to a database issue. Please try again or dial local emergency numbers.`,
+      { reply_markup: { remove_keyboard: true } }
+    );
+  }
+}
 
 async function handleRegisterCall(chatId) {
   clearState(chatId);
@@ -267,22 +372,30 @@ async function handleTextComplaint(chatId, text) {
     ticketData.duplicate_of = existingTicket.id;
   }
 
-  const ticket = await createTicket(ticketData);
-  const urgencyEmoji = { urgent: '🔴', medium: '🟡', low: '🟢' }[classification.urgency] || '🟢';
+  try {
+    const ticket = await createTicket(ticketData);
+    const urgencyEmoji = { urgent: '🔴', medium: '🟡', low: '🟢' }[classification.urgency] || '🟢';
 
-  let response =
-    `✅ Your complaint has been registered.\n\n` +
-    `${urgencyEmoji} Ticket: <b>${ticket.ticket_number}</b>\n` +
-    `Department: ${classification.department}\n` +
-    `Summary: ${classification.summary}\n`;
+    let response =
+      `✅ Your complaint has been registered.\n\n` +
+      `${urgencyEmoji} Ticket: <b>${ticket.ticket_number}</b>\n` +
+      `Department: ${classification.department}\n` +
+      `Summary: ${classification.summary}\n`;
 
-  if (existingTicket) {
-    response += `\nℹ️ A similar complaint (${existingTicket.ticket_number}) is already being tracked — your report has been linked to it.\n`;
+    if (existingTicket) {
+      response += `\nℹ️ A similar complaint (${existingTicket.ticket_number}) is already being tracked — your report has been linked to it.\n`;
+    }
+
+    response += `\nUse /status ${ticket.ticket_number} to check updates.`;
+
+    await safeSendMessage(chatId, response);
+  } catch (err) {
+    console.error('[Telegram] Failed to create text complaint ticket:', err);
+    await safeSendMessage(chatId,
+      `❌ We were unable to register your complaint right now due to a database issue. Please try again later.`,
+      { reply_markup: MAIN_MENU_KEYBOARD }
+    );
   }
-
-  response += `\nUse /status ${ticket.ticket_number} to check updates.`;
-
-  await safeSendMessage(chatId, response);
 }
 
 /**

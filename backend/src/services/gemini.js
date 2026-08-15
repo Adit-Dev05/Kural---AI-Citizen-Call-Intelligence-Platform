@@ -18,6 +18,7 @@ const VALID_DEPARTMENTS = [
   'Roads & Infrastructure',
   'Health Services',
   'Police',
+  'Fire Department',
   'General Grievance',
 ];
 
@@ -29,6 +30,7 @@ const DEPARTMENT_KEYWORDS = {
   'Roads & Infrastructure': ['pothole', 'road damage', 'broken road', 'footpath', 'pavement', 'bridge', 'culvert', 'construction debris', 'road block', 'damaged road', 'broken pavement'],
   'Health Services': ['hospital', 'clinic', 'ambulance', 'disease outbreak', 'epidemic', 'dengue', 'malaria', 'medical emergency', 'doctor', 'nurse', 'vaccination', 'primary health centre'],
   'Police': ['theft', 'robbery', 'crime', 'noise complaint', 'harassment', 'assault', 'traffic violation', 'illegal parking', 'stalking', 'safety concern', 'law and order'],
+  'Fire Department': ['fire', 'burning', 'smoke', 'gas leak', 'explosion', 'cylinder blast', 'rescue'],
 };
 
 const URGENT_KEYWORDS = ['fire', 'flood', 'flooding', 'gas leak', 'electrocution', 'collapsed', 'drowning', 'emergency', 'life threatening'];
@@ -97,7 +99,7 @@ async function callGeminiWithRetry(text) {
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-3.6-flash',
     generationConfig: {
       responseMimeType: 'application/json',
       responseSchema: classificationSchema,

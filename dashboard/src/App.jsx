@@ -7,9 +7,11 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { Routes, Route, NavLink } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import MetricCards from './components/MetricCards';
 import TicketQueue from './components/TicketQueue';
+import SLAAnalytics from './components/SLAAnalytics';
 
 export default function App() {
   const [tickets, setTickets] = useState([]);
@@ -97,18 +99,50 @@ export default function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <div>
-          <h1>Kural</h1>
-          <span className="subtitle">AI Citizen Call Intelligence Platform — Officer Dashboard</span>
+        <div className="header-top">
+          <div>
+            <h1>Kural</h1>
+            <span className="subtitle">AI Citizen Call Intelligence Platform — Officer Dashboard</span>
+          </div>
+          <div className="live-indicator">
+            <span className="live-dot"></span>
+            Live
+          </div>
         </div>
-        <div className="live-indicator">
-          <span className="live-dot"></span>
-          Live
-        </div>
+        <nav className="nav-bar">
+          <NavLink to="/" className={({isActive}) => isActive ? "nav-link active" : "nav-link"} end>Central</NavLink>
+          <NavLink to="/dashboard/sanitation" className={({isActive}) => isActive ? "nav-link active" : "nav-link"}>Sanitation</NavLink>
+          <NavLink to="/dashboard/water-supply" className={({isActive}) => isActive ? "nav-link active" : "nav-link"}>Water Supply</NavLink>
+          <NavLink to="/dashboard/electricity" className={({isActive}) => isActive ? "nav-link active" : "nav-link"}>Electricity</NavLink>
+          <NavLink to="/dashboard/roads-infrastructure" className={({isActive}) => isActive ? "nav-link active" : "nav-link"}>Roads & Infra</NavLink>
+          <NavLink to="/dashboard/health-services" className={({isActive}) => isActive ? "nav-link active" : "nav-link"}>Health Services</NavLink>
+          <NavLink to="/dashboard/police" className={({isActive}) => isActive ? "nav-link active" : "nav-link"}>Police</NavLink>
+          <NavLink to="/dashboard/fire-department" className={({isActive}) => isActive ? "nav-link active" : "nav-link"}>Fire Dept</NavLink>
+          <NavLink to="/dashboard/general" className={({isActive}) => isActive ? "nav-link active" : "nav-link"}>General</NavLink>
+        </nav>
       </header>
 
-      <MetricCards tickets={tickets} />
-      <TicketQueue tickets={tickets} newTicketIds={newTicketIds} />
+      <Routes>
+        <Route path="/" element={<DashboardView tickets={tickets} newTicketIds={newTicketIds} fixedDepartment={null} />} />
+        <Route path="/dashboard/sanitation" element={<DashboardView tickets={tickets} newTicketIds={newTicketIds} fixedDepartment="Sanitation" />} />
+        <Route path="/dashboard/water-supply" element={<DashboardView tickets={tickets} newTicketIds={newTicketIds} fixedDepartment="Water Supply" />} />
+        <Route path="/dashboard/electricity" element={<DashboardView tickets={tickets} newTicketIds={newTicketIds} fixedDepartment="Electricity" />} />
+        <Route path="/dashboard/roads-infrastructure" element={<DashboardView tickets={tickets} newTicketIds={newTicketIds} fixedDepartment="Roads & Infrastructure" />} />
+        <Route path="/dashboard/health-services" element={<DashboardView tickets={tickets} newTicketIds={newTicketIds} fixedDepartment="Health Services" />} />
+        <Route path="/dashboard/police" element={<DashboardView tickets={tickets} newTicketIds={newTicketIds} fixedDepartment="Police" />} />
+        <Route path="/dashboard/fire-department" element={<DashboardView tickets={tickets} newTicketIds={newTicketIds} fixedDepartment="Fire Department" />} />
+        <Route path="/dashboard/general" element={<DashboardView tickets={tickets} newTicketIds={newTicketIds} fixedDepartment="General Grievance" />} />
+      </Routes>
     </div>
+  );
+}
+
+function DashboardView({ tickets, newTicketIds, fixedDepartment }) {
+  return (
+    <>
+      <MetricCards tickets={tickets} fixedDepartment={fixedDepartment} />
+      {!fixedDepartment && <SLAAnalytics tickets={tickets} />}
+      <TicketQueue tickets={tickets} newTicketIds={newTicketIds} fixedDepartment={fixedDepartment} />
+    </>
   );
 }

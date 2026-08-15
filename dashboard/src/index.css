@@ -86,12 +86,13 @@ body {
 }
 
 .app-header {
+  margin-bottom: var(--space-6);
+}
+
+.header-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--space-6);
-  padding-bottom: var(--space-4);
-  border-bottom: 1px solid var(--color-border);
 }
 
 .app-header h1 {
@@ -129,6 +130,32 @@ body {
   50% { opacity: 0.4; }
 }
 
+/* ─── Navigation ─────────────────────────────────────────────────────────── */
+.nav-bar {
+  display: flex;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+}
+
+.nav-link {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  padding: var(--space-2) 0;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.nav-link:hover {
+  color: var(--color-text-primary);
+}
+
+.nav-link.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
 /* ─── Metric Cards ───────────────────────────────────────────────────────── */
 .metric-cards {
   display: grid;
@@ -162,6 +189,11 @@ body {
 
 .metric-card.urgent .value {
   color: var(--color-urgent);
+}
+
+.metric-card.urgent .subtitle {
+  color: var(--color-neutral);
+  font-size: 14px;
 }
 
 /* ─── Filters ────────────────────────────────────────────────────────────── */
@@ -219,7 +251,7 @@ body {
 /* ─── Ticket Row ─────────────────────────────────────────────────────────── */
 .ticket-row {
   display: grid;
-  grid-template-columns: 90px 1fr 150px 140px 80px 60px 65px auto;
+  grid-template-columns: 90px 1fr 150px 100px 130px 115px 60px 75px auto;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-4) var(--space-5);
@@ -229,6 +261,65 @@ body {
 
 .ticket-row:last-child {
   border-bottom: none;
+}
+
+.ticket-details-panel {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  font-size: 14px;
+  animation: slide-down 0.2s ease-out;
+}
+
+.ticket-details-panel.is-emergency-panel {
+  background-color: #fff5f5;
+  border-left: 4px solid var(--color-urgent);
+}
+
+.details-group strong {
+  color: var(--color-text-primary);
+  display: block;
+  margin-bottom: var(--space-1);
+}
+
+.details-group p {
+  color: var(--color-text-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.btn-map {
+  display: inline-block;
+  margin-top: var(--space-2);
+  padding: 6px 12px;
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  text-decoration: none;
+  color: var(--color-text-primary);
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-map:hover {
+  background-color: #e2e8f0;
+}
+
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ticket-row.is-emergency {
+  border-left: 4px solid var(--color-urgent);
+  background-color: #fef2f2;
+}
+
+.ticket-row.is-emergency:hover {
+  background-color: #fee2e2;
 }
 
 .ticket-row:hover {
@@ -328,6 +419,46 @@ body {
 .badge-rules {
   background: var(--color-warning-bg);
   color: var(--color-warning);
+}
+
+.badge-sla {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+}
+
+/* ─── SLA Analytics ──────────────────────────────────────────────────────── */
+.sla-analytics-container {
+  margin-bottom: var(--space-6);
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-4);
+  color: var(--color-text-primary);
+}
+
+.sla-overview-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.chart-container {
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+
+.chart-title {
+  font-size: 14px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-neutral);
+  margin-top: 0;
+  margin-bottom: var(--space-4);
 }
 
 /* ─── Source icon ─────────────────────────────────────────────────────────── */

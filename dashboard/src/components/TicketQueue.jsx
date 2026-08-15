@@ -27,14 +27,17 @@ const DEPARTMENTS = [
 const STATUSES = ['All Statuses', 'open', 'in_progress', 'resolved', 'incomplete'];
 const SOURCES = ['All Sources', 'call', 'text'];
 
-export default function TicketQueue({ tickets, newTicketIds }) {
+export default function TicketQueue({ tickets, newTicketIds, fixedDepartment }) {
   const [departmentFilter, setDepartmentFilter] = useState('All Departments');
   const [statusFilter, setStatusFilter] = useState('All Statuses');
   const [sourceFilter, setSourceFilter] = useState('All Sources');
 
   // Apply filters
   let filtered = tickets.filter((t) => !t.duplicate_of); // Don't show duplicates as separate rows
-  if (departmentFilter !== 'All Departments') {
+
+  if (fixedDepartment) {
+    filtered = filtered.filter((t) => t.department === fixedDepartment);
+  } else if (departmentFilter !== 'All Departments') {
     filtered = filtered.filter((t) => t.department === departmentFilter);
   }
   if (statusFilter !== 'All Statuses') {
@@ -65,16 +68,18 @@ export default function TicketQueue({ tickets, newTicketIds }) {
     <div>
       {/* Filters */}
       <div className="filters">
-        <select
-          className="filter-select"
-          value={departmentFilter}
-          onChange={(e) => setDepartmentFilter(e.target.value)}
-          id="filter-department"
-        >
-          {DEPARTMENTS.map((d) => (
-            <option key={d} value={d}>{d}</option>
-          ))}
-        </select>
+        {!fixedDepartment && (
+          <select
+            className="filter-select"
+            value={departmentFilter}
+            onChange={(e) => setDepartmentFilter(e.target.value)}
+            id="filter-department"
+          >
+            {DEPARTMENTS.map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+        )}
 
         <select
           className="filter-select"
@@ -131,6 +136,7 @@ export default function TicketQueue({ tickets, newTicketIds }) {
 
 function TicketRow({ ticket, isNew, onResolve }) {
   const [resolving, setResolving] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const urgencyBadgeClass = {
     urgent: 'badge-urgent',
@@ -148,16 +154,26 @@ function TicketRow({ ticket, isNew, onResolve }) {
 
   const timeSince = getTimeSince(ticket.created_at);
 
-  async function handleClick() {
+  const isSlaBreached = 
+    (ticket.status === 'open' || ticket.status === 'in_progress') && 
+    (Date.now() - new Date(ticket.created_at).getTime()) > (24 * 60 * 60 * 1000);
+
+  async function handleResolveClick(e) {
+    e.stopPropagation(); // Prevent row expansion when clicking resolve
     setResolving(true);
     await onResolve(ticket.id);
     // State will be updated via realtime, but keep the button disabled briefly
     setTimeout(() => setResolving(false), 2000);
   }
 
+  function toggleExpand() {
+    setIsExpanded(!isExpanded);
+  }
+
   return (
-    <div className={`ticket-row ${isNew ? 'is-new' : ''}`}>
-      <span className="ticket-number">{ticket.ticket_number}</span>
+    <>
+      <div className={`ticket-row ${isNew ? 'is-new' : ''} ${ticket.source === 'emergency' ? 'is-emergency' : ''}`} onClick={toggleExpand} style={{ cursor: 'pointer' }}>
+        <span className="ticket-number">{ticket.ticket_number}</span>
 
       <div>
         <div className="ticket-summary" title={ticket.summary}>
@@ -172,10 +188,19 @@ function TicketRow({ ticket, isNew, onResolve }) {
 
       <span className={`badge ${urgencyBadgeClass}`}>{urgencyLabel}</span>
 
+      {isSlaBreached ? (
+        <span className="badge badge-sla">⚠️ SLA Breached</span>
+      ) : (
+        <span></span>
+      )}
+
       <span className={`badge badge-status-${ticket.status}`}>{statusLabel}</span>
 
-      <span className="source-icon" title={ticket.source === 'call' ? 'Filed via call' : 'Filed via text'}>
-        {ticket.source === 'call' ? '📞' : '📝'}
+      <span className="source-icon" title={
+        ticket.source === 'emergency' ? 'Emergency Dispatch' :
+        ticket.source === 'call' ? 'Filed via call' : 'Filed via text'
+      }>
+        {ticket.source === 'emergency' ? '🚨' : ticket.source === 'call' ? '📞' : '📝'}
       </span>
 
       <span
@@ -193,6 +218,7 @@ function TicketRow({ ticket, isNew, onResolve }) {
             target="_blank"
             rel="noopener noreferrer"
             title="Listen to call recording"
+            onClick={(e) => e.stopPropagation()}
           >
             🎧
           </a>
@@ -201,7 +227,7 @@ function TicketRow({ ticket, isNew, onResolve }) {
         {ticket.status !== 'resolved' ? (
           <button
             className="btn btn-resolve"
-            onClick={handleClick}
+            onClick={handleResolveClick}
             disabled={resolving}
             id={`resolve-${ticket.ticket_number}`}
           >
@@ -212,6 +238,41 @@ function TicketRow({ ticket, isNew, onResolve }) {
         )}
       </div>
     </div>
+      
+    {isExpanded && (
+      <div className={`ticket-details-panel ${ticket.source === 'emergency' ? 'is-emergency-panel' : ''}`}>
+        {ticket.source === 'emergency' ? (
+          <div className="details-group">
+            <strong>Emergency Live Location:</strong>
+            <div className="location-info">
+              Latitude: <code>{ticket.latitude}</code><br/>
+              Longitude: <code>{ticket.longitude}</code>
+            </div>
+            {ticket.latitude && ticket.longitude && (
+              <a 
+                href={`https://www.google.com/maps?q=${ticket.latitude},${ticket.longitude}`} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="btn-map"
+              >
+                🗺️ Open in Google Maps
+              </a>
+            )}
+          </div>
+        ) : (
+          <div className="details-group">
+            <strong>Citizen Transcript / Complaint:</strong>
+            <p className="transcript-text">{ticket.raw_transcript || 'No transcript available.'}</p>
+          </div>
+        )}
+
+        <div className="details-group">
+          <strong>Classified Issue Type:</strong>
+          <p>{ticket.issue_type || 'General'}</p>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
