@@ -1,0 +1,418 @@
+/*
+ * Kural Dashboard — Design System
+ *
+ * Philosophy: calm, restrained, trustworthy. Government software, not a startup demo.
+ * - Flat surfaces, no gradients, no shadows
+ * - One typeface (Inter), two weights (400 regular, 500 medium, 600 semibold for headings)
+ * - 8px spacing scale
+ * - Status colors are the ONLY saturated colors — everything else is neutral
+ * - Generous whitespace
+ */
+
+/* ─── Reset ──────────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ─── Root Variables ─────────────────────────────────────────────────────── */
+:root {
+  /* Neutrals */
+  --color-bg: #f8f9fa;
+  --color-surface: #ffffff;
+  --color-border: #e2e5e9;
+  --color-text-primary: #1a1d21;
+  --color-text-secondary: #5f6368;
+  --color-text-muted: #9aa0a6;
+
+  /* Status colors — the only saturated colors in the interface */
+  --color-urgent: #d93025;
+  --color-urgent-bg: #fce8e6;
+  --color-warning: #e37400;
+  --color-warning-bg: #fef7e0;
+  --color-success: #188038;
+  --color-success-bg: #e6f4ea;
+  --color-neutral: #80868b;
+  --color-neutral-bg: #f1f3f4;
+
+  /* Accent */
+  --color-accent: #1a73e8;
+  --color-accent-hover: #1557b0;
+
+  /* Spacing (8px scale) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 40px;
+  --space-8: 48px;
+
+  /* Typography */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-size-title: 20px;
+  --font-size-label: 14px;
+  --font-size-body: 13px;
+  --font-size-small: 12px;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  --radius: 6px;
+}
+
+/* ─── Base ───────────────────────────────────────────────────────────────── */
+body {
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-primary);
+  background-color: var(--color-bg);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── App Layout ─────────────────────────────────────────────────────────── */
+.app {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-5);
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-6);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.app-header h1 {
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  letter-spacing: -0.3px;
+}
+
+.app-header .subtitle {
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-regular);
+}
+
+.live-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-small);
+  color: var(--color-success);
+  font-weight: var(--font-weight-medium);
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--color-success);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ─── Metric Cards ───────────────────────────────────────────────────────── */
+.metric-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.metric-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-5);
+}
+
+.metric-card .label {
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--space-2);
+}
+
+.metric-card .value {
+  font-size: 28px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  line-height: 1;
+}
+
+.metric-card.urgent .value {
+  color: var(--color-urgent);
+}
+
+/* ─── Filters ────────────────────────────────────────────────────────────── */
+.filters {
+  display: flex;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.filter-select {
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--color-text-primary);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  appearance: auto;
+}
+
+.filter-select:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -1px;
+}
+
+/* ─── Ticket Queue ───────────────────────────────────────────────────────── */
+.ticket-queue {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.queue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.queue-header h2 {
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.queue-count {
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+/* ─── Ticket Row ─────────────────────────────────────────────────────────── */
+.ticket-row {
+  display: grid;
+  grid-template-columns: 90px 1fr 150px 140px 80px 60px 65px auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+  transition: background-color 0.2s ease;
+}
+
+.ticket-row:last-child {
+  border-bottom: none;
+}
+
+.ticket-row:hover {
+  background-color: var(--color-bg);
+}
+
+.ticket-row.is-new {
+  animation: highlight-new 3s ease-out;
+}
+
+@keyframes highlight-new {
+  0% { background-color: #e8f0fe; }
+  100% { background-color: transparent; }
+}
+
+.ticket-number {
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-body);
+  color: var(--color-accent);
+}
+
+.ticket-summary {
+  font-size: var(--font-size-body);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ticket-department {
+  font-size: var(--font-size-small);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+.ticket-location {
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ─── Badges ─────────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: 3px;
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.badge-urgent {
+  background: var(--color-urgent-bg);
+  color: var(--color-urgent);
+}
+
+.badge-medium {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+.badge-low {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.badge-status-open {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+.badge-status-in_progress {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+.badge-status-resolved {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.badge-status-incomplete {
+  background: var(--color-neutral-bg);
+  color: var(--color-neutral);
+}
+
+.badge-ai {
+  background: #e8f0fe;
+  color: #1a73e8;
+}
+
+.badge-rules {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+/* ─── Source icon ─────────────────────────────────────────────────────────── */
+.source-icon {
+  font-size: 16px;
+  text-align: center;
+  cursor: default;
+}
+
+/* ─── Action Buttons ─────────────────────────────────────────────────────── */
+.btn {
+  font-family: var(--font-family);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.btn-resolve {
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
+.btn-resolve:hover {
+  background: var(--color-success-bg);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ─── Recording link ─────────────────────────────────────────────────────── */
+.recording-link {
+  font-size: var(--font-size-small);
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.recording-link:hover {
+  text-decoration: underline;
+}
+
+/* ─── Empty State ────────────────────────────────────────────────────────── */
+.empty-state {
+  text-align: center;
+  padding: var(--space-8) var(--space-5);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-label);
+}
+
+/* ─── Responsive ─────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .metric-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .ticket-row {
+    grid-template-columns: 80px 1fr 100px auto;
+  }
+
+  .ticket-location,
+  .source-icon,
+  .ticket-department {
+    display: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .metric-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .app {
+    padding: var(--space-4) var(--space-3);
+  }
+}
