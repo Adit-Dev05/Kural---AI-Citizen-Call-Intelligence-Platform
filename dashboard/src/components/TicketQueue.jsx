@@ -10,7 +10,7 @@
  * - "Mark Resolved" updates Supabase directly
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
 const DEPARTMENTS = [
@@ -33,7 +33,8 @@ export default function TicketQueue({ tickets, newTicketIds, fixedDepartment }) 
   const [sourceFilter, setSourceFilter] = useState('All Sources');
 
   // Apply filters
-  let filtered = tickets.filter((t) => !t.duplicate_of); // Don't show duplicates as separate rows
+  const primaryTickets = tickets.filter((t) => !t.duplicate_of);
+  let filtered = primaryTickets;
 
   if (fixedDepartment) {
     filtered = filtered.filter((t) => t.department === fixedDepartment);
@@ -50,18 +51,17 @@ export default function TicketQueue({ tickets, newTicketIds, fixedDepartment }) 
   // Sort newest-first
   filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-  // Resolve a ticket
-  async function handleResolve(ticketId) {
+  // Change ticket status
+  async function handleStatusChange(ticketId, newStatus) {
     const { error } = await supabase
       .from('tickets')
-      .update({ status: 'resolved', updated_at: new Date().toISOString() })
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
       .eq('id', ticketId);
 
     if (error) {
-      console.error('Error resolving ticket:', error);
+      console.error('Error updating ticket status:', error);
       alert('Failed to update ticket status. Please try again.');
     }
-    // No local state update needed — realtime subscription will handle it
   }
 
   return (
@@ -120,23 +120,52 @@ export default function TicketQueue({ tickets, newTicketIds, fixedDepartment }) 
             No tickets match the current filters.
           </div>
         ) : (
-          filtered.map((ticket) => (
-            <TicketRow
-              key={ticket.id}
-              ticket={ticket}
-              isNew={newTicketIds.has(ticket.id)}
-              onResolve={handleResolve}
-            />
-          ))
+          filtered.map((ticket) => {
+            const duplicates = tickets.filter(t => t.duplicate_of === ticket.id);
+            return (
+              <TicketRow
+                key={ticket.id}
+                ticket={ticket}
+                isNew={newTicketIds.has(ticket.id)}
+                duplicates={duplicates}
+                onStatusChange={handleStatusChange}
+              />
+            );
+          })
         )}
       </div>
     </div>
   );
 }
 
-function TicketRow({ ticket, isNew, onResolve }) {
-  const [resolving, setResolving] = useState(false);
+function TicketRow({ ticket, isNew, duplicates, onStatusChange }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(false);
+  const [timeLeft, setTimeLeft] = useState('');
+
+  useEffect(() => {
+    if (ticket.status === 'resolved') {
+      setTimeLeft('');
+      return;
+    }
+    const updateTime = () => {
+      const elapsed = Date.now() - new Date(ticket.created_at).getTime();
+      const slaLimit = 24 * 60 * 60 * 1000;
+      const remaining = slaLimit - elapsed;
+      
+      if (remaining <= 0) {
+        setTimeLeft('SLA Breached');
+      } else {
+        const h = Math.floor(remaining / 3600000);
+        const m = Math.floor((remaining % 3600000) / 60000);
+        setTimeLeft(`${h}h ${m}m left`);
+      }
+    };
+    
+    updateTime();
+    const interval = setInterval(updateTime, 60000);
+    return () => clearInterval(interval);
+  }, [ticket.created_at, ticket.status]);
 
   const urgencyBadgeClass = {
     urgent: 'badge-urgent',
@@ -154,16 +183,11 @@ function TicketRow({ ticket, isNew, onResolve }) {
 
   const timeSince = getTimeSince(ticket.created_at);
 
-  const isSlaBreached = 
-    (ticket.status === 'open' || ticket.status === 'in_progress') && 
-    (Date.now() - new Date(ticket.created_at).getTime()) > (24 * 60 * 60 * 1000);
+  const isSlaBreached = timeLeft === 'SLA Breached';
 
-  async function handleResolveClick(e) {
-    e.stopPropagation(); // Prevent row expansion when clicking resolve
-    setResolving(true);
-    await onResolve(ticket.id);
-    // State will be updated via realtime, but keep the button disabled briefly
-    setTimeout(() => setResolving(false), 2000);
+  function handleStatusSelect(e) {
+    e.stopPropagation();
+    onStatusChange(ticket.id, e.target.value);
   }
 
   function toggleExpand() {
@@ -172,7 +196,7 @@ function TicketRow({ ticket, isNew, onResolve }) {
 
   return (
     <>
-      <div className={`ticket-row ${isNew ? 'is-new' : ''} ${ticket.source === 'emergency' ? 'is-emergency' : ''}`} onClick={toggleExpand} style={{ cursor: 'pointer' }}>
+      <div className={`ticket-row ${isNew ? 'is-new' : ''} ${ticket.source === 'emergency' ? 'is-emergency' : ''} ${isExpanded ? 'is-expanded' : ''}`} onClick={toggleExpand} style={{ cursor: 'pointer' }}>
         <span className="ticket-number">{ticket.ticket_number}</span>
 
       <div>
@@ -186,29 +210,51 @@ function TicketRow({ ticket, isNew, onResolve }) {
 
       <span className="ticket-department">{ticket.department}</span>
 
-      <span className={`badge ${urgencyBadgeClass}`}>{urgencyLabel}</span>
+      <div className="ticket-meta-badges">
+        <span className={`badge ${urgencyBadgeClass}`}>{urgencyLabel}</span>
 
-      {isSlaBreached ? (
-        <span className="badge badge-sla">⚠️ SLA Breached</span>
-      ) : (
-        <span></span>
-      )}
+        {ticket.sentiment === 'angry' || ticket.sentiment === 'frustrated' ? (
+          <span className="badge badge-sentiment" title="Angry/Frustrated Caller">
+            {ticket.sentiment === 'angry' ? '💢 Angry' : '😡 Frustrated'}
+          </span>
+        ) : null}
 
-      <span className={`badge badge-status-${ticket.status}`}>{statusLabel}</span>
+        {duplicates && duplicates.length > 0 && (
+          <span className="badge badge-duplicates" title="Similar complaints linked">
+            +{duplicates.length} Similar
+          </span>
+        )}
 
-      <span className="source-icon" title={
-        ticket.source === 'emergency' ? 'Emergency Dispatch' :
-        ticket.source === 'call' ? 'Filed via call' : 'Filed via text'
-      }>
-        {ticket.source === 'emergency' ? '🚨' : ticket.source === 'call' ? '📞' : '📝'}
-      </span>
+        {ticket.status !== 'resolved' && (
+          isSlaBreached ? (
+            <span className="badge badge-sla flash-red">⚠️ SLA Breached</span>
+          ) : (
+            <span className={`badge ${timeLeft.includes('h ') && parseInt(timeLeft) < 4 ? 'badge-sla-warning' : 'badge-sla-safe'}`}>
+              ⏳ {timeLeft}
+            </span>
+          )
+        )}
+      </div>
 
-      <span
-        className={`badge ${ticket.classified_by === 'rules' ? 'badge-rules' : 'badge-ai'}`}
-        title={ticket.classified_by === 'rules' ? 'Classified by keyword rules (Gemini was unavailable)' : 'Classified by AI (Gemini)'}
-      >
-        {ticket.classified_by === 'rules' ? '⚙ Rules' : '✦ AI'}
-      </span>
+      <div className="ticket-actions">
+        <select
+          className={`status-dropdown status-${ticket.status}`}
+          value={ticket.status}
+          onChange={handleStatusSelect}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <option value="open">Open</option>
+          <option value="in_progress">In Progress</option>
+          <option value="resolved">Resolved</option>
+          <option value="incomplete">Incomplete</option>
+        </select>
+
+        <span className="source-icon" title={
+          ticket.source === 'emergency' ? 'Emergency Dispatch' :
+          ticket.source === 'call' ? 'Filed via call' : 'Filed via text'
+        }>
+          {ticket.source === 'emergency' ? '🚨' : ticket.source === 'call' ? '📞' : '📝'}
+        </span>
 
       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
         {ticket.recording_url && (
@@ -224,19 +270,8 @@ function TicketRow({ ticket, isNew, onResolve }) {
           </a>
         )}
 
-        {ticket.status !== 'resolved' ? (
-          <button
-            className="btn btn-resolve"
-            onClick={handleResolveClick}
-            disabled={resolving}
-            id={`resolve-${ticket.ticket_number}`}
-          >
-            {resolving ? 'Updating...' : '✓ Resolve'}
-          </button>
-        ) : (
-          <span className="badge badge-status-resolved">Done</span>
-        )}
       </div>
+    </div>
     </div>
       
     {isExpanded && (
@@ -261,8 +296,21 @@ function TicketRow({ ticket, isNew, onResolve }) {
           </div>
         ) : (
           <div className="details-group">
-            <strong>Citizen Transcript / Complaint:</strong>
-            <p className="transcript-text">{ticket.raw_transcript || 'No transcript available.'}</p>
+            <div className="transcript-header">
+              <strong>{ticket.source === 'call' ? 'Citizen Call Transcript:' : 'Citizen Complaint Text:'}</strong>
+              {ticket.source === 'call' && (
+                <button 
+                  className="btn-toggle-transcript" 
+                  onClick={() => setShowTranscript(!showTranscript)}
+                >
+                  {showTranscript ? 'Hide Transcript' : 'View Full Transcript'}
+                </button>
+              )}
+            </div>
+            
+            {(ticket.source !== 'call' || showTranscript) && (
+              <p className="transcript-text">{ticket.raw_transcript || 'No transcript available.'}</p>
+            )}
           </div>
         )}
 

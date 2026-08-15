@@ -223,18 +223,19 @@ body {
 
 /* ─── Ticket Queue ───────────────────────────────────────────────────────── */
 .ticket-queue {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: transparent;
+  border: none;
 }
 
 .queue-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--color-border);
+  padding: 0 4px;
+  margin-bottom: 8px;
 }
 
 .queue-header h2 {
@@ -248,30 +249,45 @@ body {
   color: var(--color-text-muted);
 }
 
-/* ─── Ticket Row ─────────────────────────────────────────────────────────── */
+/* ─── Ticket Row (Card style) ────────────────────────────────────────────── */
 .ticket-row {
-  display: grid;
-  grid-template-columns: 90px 1fr 150px 100px 130px 115px 60px 75px auto;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--color-border);
-  transition: background-color 0.2s ease;
+  gap: 16px;
+  padding: 20px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
-.ticket-row:last-child {
-  border-bottom: none;
+.ticket-row:hover {
+  background-color: var(--color-surface);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
 }
 
 .ticket-details-panel {
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
-  padding: var(--space-4) var(--space-5);
+  background: #f8fafc;
+  border: 1px solid var(--color-border);
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  margin-top: -16px;
+  padding: 24px 20px 20px;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
   font-size: 14px;
   animation: slide-down 0.2s ease-out;
+  box-shadow: inset 0 4px 6px -6px rgba(0,0,0,0.1);
+}
+
+.ticket-row.is-expanded {
+  border-radius: 12px 12px 0 0;
+  border-bottom: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
 
 .ticket-details-panel.is-emergency-panel {
@@ -335,43 +351,50 @@ body {
   100% { background-color: transparent; }
 }
 
+.ticket-row > div:nth-child(2) {
+  flex: 1 1 200px;
+}
+
 .ticket-number {
-  font-weight: var(--font-weight-medium);
-  font-size: var(--font-size-body);
+  font-weight: 600;
+  font-size: 14px;
   color: var(--color-accent);
+  background: #f0f4ff;
+  padding: 4px 8px;
+  border-radius: 6px;
 }
 
 .ticket-summary {
-  font-size: var(--font-size-body);
+  font-size: 15px;
+  font-weight: 500;
   color: var(--color-text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  margin-bottom: 4px;
 }
 
 .ticket-department {
-  font-size: var(--font-size-small);
+  font-size: 13px;
   color: var(--color-text-secondary);
-  font-weight: var(--font-weight-medium);
+  font-weight: 500;
+  background: #f8fafc;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
 }
 
 .ticket-location {
-  font-size: var(--font-size-small);
+  font-size: 13px;
   color: var(--color-text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* ─── Badges ─────────────────────────────────────────────────────────────── */
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
-  padding: 2px var(--space-2);
-  border-radius: 3px;
-  font-size: var(--font-size-small);
-  font-weight: var(--font-weight-medium);
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
   line-height: 1.4;
   white-space: nowrap;
 }
@@ -462,10 +485,24 @@ body {
 }
 
 /* ─── Source icon ─────────────────────────────────────────────────────────── */
+.ticket-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .source-icon {
-  font-size: 16px;
+  font-size: 18px;
   text-align: center;
   cursor: default;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: #f8fafc;
+  border-radius: 50%;
+  border: 1px solid #e2e8f0;
 }
 
 /* ─── Action Buttons ─────────────────────────────────────────────────────── */
@@ -547,3 +584,258 @@ body {
     padding: var(--space-4) var(--space-3);
   }
 }
+
+/* Dashboard AI Enhancements */
+.ticket-meta-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.status-dropdown {
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-family: var(--font-family);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+}
+
+.status-dropdown.status-open { color: var(--color-warning); border-color: var(--color-warning-bg); background: var(--color-warning-bg); }
+.status-dropdown.status-in_progress { color: #ff9900; border-color: rgba(255,165,0,0.2); background: rgba(255,165,0,0.1); }
+.status-dropdown.status-resolved { color: var(--color-success); border-color: var(--color-success-bg); background: var(--color-success-bg); }
+.status-dropdown.status-incomplete { color: var(--color-neutral); }
+
+.transcript-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.btn-toggle-transcript {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-toggle-transcript:hover {
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+}
+
+.badge-sentiment {
+  background: rgba(255, 100, 100, 0.15);
+  color: #ff4444;
+  border: 1px solid rgba(255, 100, 100, 0.3);
+  animation: pulse-glow 2s infinite;
+}
+
+@keyframes pulse-glow {
+  0% { box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(255, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 68, 68, 0); }
+}
+
+.badge-duplicates {
+  background: rgba(100, 150, 255, 0.1);
+  color: #5588ff;
+  border: 1px solid rgba(100, 150, 255, 0.3);
+}
+
+.badge-sla-warning {
+  background: rgba(255, 165, 0, 0.15);
+  color: #ff9900;
+  border: 1px solid rgba(255, 165, 0, 0.3);
+}
+
+.badge-sla-safe {
+  background: rgba(100, 255, 100, 0.1);
+  color: #33cc33;
+  border: 1px solid rgba(100, 255, 100, 0.3);
+}
+
+.flash-red {
+  background: rgba(255, 0, 0, 0.2);
+  color: #ff0000;
+  animation: pulse-glow-red 1s infinite;
+}
+
+@keyframes pulse-glow-red {
+  0% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.6); }
+  70% { box-shadow: 0 0 0 10px rgba(255, 0, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0); }
+}
+
+.executive-summary-card {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  margin-bottom: var(--space-5);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  position: relative;
+  overflow: hidden;
+}
+
+.executive-summary-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #5588ff, #ff4444, #ff9900);
+}
+
+.summary-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.summary-header h3 {
+  margin: 0;
+  font-size: var(--font-size-label);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.ai-icon {
+  font-size: 1.4rem;
+}
+
+.summary-content {
+  font-size: var(--font-size-body);
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+.loading-text {
+  font-style: italic;
+  opacity: 0.7;
+}
+
+/* ─── Map View Card ─────────────────────────────────────────────────────── */
+.map-view-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  margin-bottom: var(--space-5);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+.map-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.map-header h3 {
+  margin: 0;
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.map-badge {
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(51, 204, 51, 0.1);
+  color: #22c55e;
+  padding: 2px 8px;
+  border-radius: 12px;
+  text-transform: uppercase;
+}
+
+.map-container {
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+}
+
+/* Leaflet Custom Marker Style */
+.custom-map-marker {
+  background: none;
+  border: none;
+}
+
+.marker-pin {
+  width: 32px;
+  height: 32px;
+  border-radius: 50% 50% 50% 0;
+  background: #3b82f6;
+  position: absolute;
+  transform: rotate(-45deg);
+  left: 50%;
+  top: 50%;
+  margin: -16px 0 0 -16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.15);
+  border: 2px solid white;
+}
+
+.marker-pin::after {
+  content: '';
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.marker-emergency .marker-pin {
+  background: #ef4444;
+  animation: map-pulse 1.5s infinite;
+}
+
+@keyframes map-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+  70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+.map-popup {
+  font-family: var(--font-family);
+  min-width: 180px;
+}
+
+.popup-header {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+}
+
+.popup-ticket-id {
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.popup-source {
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.popup-body p {
+  margin: 3px 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+

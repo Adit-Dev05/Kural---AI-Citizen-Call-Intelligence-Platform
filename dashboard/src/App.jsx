@@ -12,6 +12,8 @@ import { supabase } from './supabaseClient';
 import MetricCards from './components/MetricCards';
 import TicketQueue from './components/TicketQueue';
 import SLAAnalytics from './components/SLAAnalytics';
+import ExecutiveSummary from './components/ExecutiveSummary';
+import MapView from './components/MapView';
 
 export default function App() {
   const [tickets, setTickets] = useState([]);
@@ -138,9 +140,15 @@ export default function App() {
 }
 
 function DashboardView({ tickets, newTicketIds, fixedDepartment }) {
+  const displayTickets = fixedDepartment
+    ? tickets.filter(t => t.department === fixedDepartment)
+    : tickets;
+
   return (
     <>
+      <ExecutiveSummary tickets={tickets} fixedDepartment={fixedDepartment} />
       <MetricCards tickets={tickets} fixedDepartment={fixedDepartment} />
+      <MapView tickets={displayTickets} />
       {!fixedDepartment && <SLAAnalytics tickets={tickets} />}
       <TicketQueue tickets={tickets} newTicketIds={newTicketIds} fixedDepartment={fixedDepartment} />
     </>
