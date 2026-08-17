@@ -1,90 +1,58 @@
 import React, { useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
-const SLA_THRESHOLD_HOURS = 24;
-
-export default function SLAAnalytics({ tickets }) {
-  const { departmentData, avgResolutionTime, slaBreachesCount } = useMemo(() => {
-    // 1. Group by department for Bar Chart
-    const deptCounts = {};
-    tickets.forEach((t) => {
-      if (t.duplicate_of) return; // exclude duplicates
-      deptCounts[t.department] = (deptCounts[t.department] || 0) + 1;
-    });
-
-    const departmentData = Object.keys(deptCounts)
-      .map(dept => ({
-        name: dept,
-        count: deptCounts[dept]
-      }))
-      .sort((a, b) => b.count - a.count);
-
-    // 2. Compute Average Resolution Time (Resolved tickets only)
-    const resolvedTickets = tickets.filter((t) => t.status === 'resolved' && !t.duplicate_of);
-    let avgResolutionTime = '—';
-    if (resolvedTickets.length > 0) {
-      const totalMs = resolvedTickets.reduce((sum, t) => {
-        const created = new Date(t.created_at).getTime();
-        const updated = new Date(t.updated_at).getTime();
-        return sum + (updated - created);
-      }, 0);
-      const avgHours = totalMs / resolvedTickets.length / (1000 * 60 * 60);
-      if (avgHours < 1) {
-        avgResolutionTime = `${Math.round(avgHours * 60)}m`;
-      } else if (avgHours < 24) {
-        avgResolutionTime = `${avgHours.toFixed(1)}h`;
-      } else {
-        avgResolutionTime = `${(avgHours / 24).toFixed(1)}d`;
-      }
+export default function SLAAnalytics({ tickets, fixedDepartment }) {
+  const { avgResTime, breaches, activeWithinSla } = useMemo(() => {
+    const relevantTickets = fixedDepartment ? tickets.filter(t => t.department === fixedDepartment && !t.duplicate_of) : tickets.filter(t => !t.duplicate_of);
+    const resolved = relevantTickets.filter(t => t.status === 'resolved');
+    
+    let avgResTime = 'N/A';
+    if (resolved.length > 0) {
+      const totalTime = resolved.reduce((acc, t) => acc + (new Date(t.updated_at).getTime() - new Date(t.created_at).getTime()), 0);
+      const avg = totalTime / resolved.length;
+      const hours = Math.floor(avg / (1000 * 60 * 60));
+      const mins = Math.floor((avg / (1000 * 60)) % 60);
+      avgResTime = `${hours}h ${mins}m`;
     }
 
-    // 3. Compute SLA Breaches (Open/In Progress > 24 hours old)
-    const nowMs = Date.now();
-    const slaBreachesCount = tickets.filter((t) => {
-      if (t.duplicate_of) return false;
-      if (t.status === 'resolved' || t.status === 'incomplete') return false; // Only open/in_progress
-      const createdMs = new Date(t.created_at).getTime();
-      const ageHours = (nowMs - createdMs) / (1000 * 60 * 60);
-      return ageHours > SLA_THRESHOLD_HOURS;
-    }).length;
+    const SLA_LIMIT = 24 * 60 * 60 * 1000; // 24 hours
+    let breaches = 0;
+    let activeWithinSla = 0;
 
-    return { departmentData, avgResolutionTime, slaBreachesCount };
-  }, [tickets]);
+    relevantTickets.forEach(t => {
+      if (t.status !== 'resolved' && t.status !== 'incomplete') {
+        if (Date.now() - new Date(t.created_at).getTime() > SLA_LIMIT) {
+          breaches++;
+        } else {
+          activeWithinSla++;
+        }
+      }
+    });
+
+    return { avgResTime, breaches, activeWithinSla };
+  }, [tickets, fixedDepartment]);
 
   return (
-    <div className="sla-analytics-container">
-      <h2 className="section-title">SLA Monitoring & Analytics</h2>
-      
-      <div className="metric-cards sla-overview-cards">
-        <div className="metric-card">
-          <div className="label">Avg Resolution Time</div>
-          <div className="value">{avgResolutionTime}</div>
-        </div>
-
-        <div className={`metric-card ${slaBreachesCount > 0 ? 'urgent' : ''}`}>
-          <div className="label">SLA Breaches (&gt; 24h)</div>
-          <div className="value">{slaBreachesCount}</div>
-        </div>
+    <div className="sla-card" style={{ padding: '24px', backgroundColor: '#fff', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', border: '1px solid #e2e8f0' }}>
+      <div className="sla-card-header" style={{ marginBottom: '24px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span>⏱️</span> SLA Monitoring
+        </h3>
+        <span style={{ fontSize: '13px', color: '#64748b' }}>{fixedDepartment || 'Overall'} Performance</span>
       </div>
-
-      <div className="chart-container">
-        <h3 className="chart-title">Tickets by Department</h3>
-        <div style={{ width: '100%', height: 250 }}>
-          <ResponsiveContainer>
-            <BarChart data={departmentData} margin={{ top: 20, right: 30, left: 0, bottom: 40 }}>
-              <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#64748b' }} interval={0} angle={-30} textAnchor="end" />
-              <YAxis tick={{ fontSize: 12, fill: '#64748b' }} allowDecimals={false} />
-              <Tooltip 
-                cursor={{ fill: '#f1f5f9' }} 
-                contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-              />
-              <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                {departmentData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill="var(--color-primary)" />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+      
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+        <div style={{ padding: '16px', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' }}>
+          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Avg Resolution Time</span>
+          <span style={{ fontSize: '24px', fontWeight: 700, color: '#0f172a', marginTop: '8px' }}>{avgResTime}</span>
+          <span style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>Target: &lt; 24h</span>
+        </div>
+        
+        <div style={{ padding: '16px', backgroundColor: breaches > 0 ? '#fef2f2' : '#f0fdf4', borderRadius: '8px', border: `1px solid ${breaches > 0 ? '#fecaca' : '#bbf7d0'}`, display: 'flex', flexDirection: 'column' }}>
+          <span style={{ fontSize: '12px', color: breaches > 0 ? '#991b1b' : '#166534', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>SLA Breaches</span>
+          <span style={{ fontSize: '24px', fontWeight: 700, color: breaches > 0 ? '#ef4444' : '#22c55e', marginTop: '8px' }}>{breaches}</span>
+          <span style={{ fontSize: '12px', color: breaches > 0 ? '#b91c1c' : '#15803d', marginTop: '4px' }}>
+            {activeWithinSla} tickets within SLA
+          </span>
         </div>
       </div>
     </div>

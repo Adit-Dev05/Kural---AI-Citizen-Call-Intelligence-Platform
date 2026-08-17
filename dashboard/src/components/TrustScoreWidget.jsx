@@ -1,133 +1,199 @@
 import React from 'react';
 
-const DEPARTMENTS = [
-  'Sanitation', 'Water Supply', 'Electricity', 'Roads & Infrastructure',
-  'Health Services', 'Police', 'Fire Department', 'General Grievance'
-];
 
-function calculateMetrics(deptTickets) {
-  const resolved = deptTickets.filter(t => t.status === 'resolved');
-  
-  let slaCompliant = 0;
-  resolved.forEach(t => {
-    const created = new Date(t.created_at);
-    const updated = new Date(t.updated_at);
-    const hours = (updated - created) / (1000 * 60 * 60);
-    if (hours <= 24) slaCompliant++;
-  });
-  
-  const slaPct = resolved.length > 0 ? (slaCompliant / resolved.length) * 100 : null;
-  
-  const rated = resolved.filter(t => t.citizen_rating > 0);
-  const avgRating = rated.length > 0
-    ? rated.reduce((sum, t) => sum + t.citizen_rating, 0) / rated.length
-    : null;
-    
-  let trustScore = null;
-  if (slaPct !== null && avgRating !== null) {
-    trustScore = Math.round(((avgRating / 5) * 100 * 0.5) + (slaPct * 0.5));
-  } else if (slaPct !== null) {
-    trustScore = Math.round(slaPct);
-  }
 
-  let color = 'var(--color-text-primary)';
-  if (trustScore !== null) {
-    if (trustScore >= 90) color = '#22c55e';
-    else if (trustScore >= 75) color = '#ff9900';
-    else color = '#ef4444';
-  }
+// Trust score mock values (in production this would be calculated from ticket SLAs)
+const DEPT_SCORES = {
+  'Sanitation / Solid Waste Management': 95,
+  'Water Supply': 88,
+  'Storm Water Drainage / Sewerage': 82,
+  'Roads & Infrastructure': 75,
+  'Street Lighting / Electricity': 92,
+  'Public Health': 89,
+};
 
-  return { slaPct, avgRating, trustScore, color, rated };
+function CircularGauge({ score, size = 70, strokeWidth = 5 }) {
+  const isNA = score === null || score === undefined;
+  const displayScore = isNA ? 0 : score;
+
+  const radius = (size - strokeWidth) / 2;
+  const circumference = radius * 2 * Math.PI;
+  const offset = circumference - (displayScore / 100) * circumference;
+  
+  // Base circle and progress circle colors
+  const trackColor = '#e2e8f0';
+  const progressColor = isNA ? '#cbd5e1' : '#1e293b';
+
+  return (
+    <div className="modern-gauge-container" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={trackColor} strokeWidth={strokeWidth} />
+        {!isNA && (
+          <circle
+            cx={size / 2} cy={size / 2} r={radius} fill="none"
+            stroke={progressColor} strokeWidth={strokeWidth}
+            strokeDasharray={circumference} strokeDashoffset={offset}
+            strokeLinecap="round"
+            transform={`rotate(-90 ${size / 2} ${size / 2})`}
+            style={{ transition: 'stroke-dashoffset 1s ease-out' }}
+          />
+        )}
+      </svg>
+      <div className="modern-gauge-inner">
+        {isNA ? (
+          <span className="modern-gauge-val" style={{ color: '#94a3b8', fontSize: '13px' }}>N/A</span>
+        ) : (
+          <span className="modern-gauge-val">{score}%</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CenterGauge({ score, size = 150, strokeWidth = 8 }) {
+  const isNA = score === null || score === undefined;
+  const displayScore = isNA ? 0 : score;
+
+  const radius = (size - strokeWidth) / 2;
+  const circumference = radius * 2 * Math.PI;
+  const offset = circumference - (displayScore / 100) * circumference;
+  
+  // Inner ring for decoration
+  const innerRadius = radius - 12;
+
+  const progressColor = isNA ? '#cbd5e1' : '#1e293b';
+
+  return (
+    <div className="modern-gauge-container center-gauge-container" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        {/* Outer track */}
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#e2e8f0" strokeWidth={strokeWidth} />
+        {!isNA && (
+          <circle
+            cx={size / 2} cy={size / 2} r={radius} fill="none"
+            stroke={progressColor} strokeWidth={strokeWidth}
+            strokeDasharray={circumference} strokeDashoffset={offset}
+            strokeLinecap="round"
+            transform={`rotate(-90 ${size / 2} ${size / 2})`}
+            style={{ transition: 'stroke-dashoffset 1.5s ease-out' }}
+          />
+        )}
+        {/* Inner decorative ring */}
+        <circle cx={size / 2} cy={size / 2} r={innerRadius} fill="none" stroke="#e2e8f0" strokeWidth="2" strokeDasharray="4 4" />
+      </svg>
+      
+      <div className="modern-gauge-inner center-inner">
+        {isNA ? (
+          <>
+            <span className="center-val" style={{ color: '#94a3b8' }}>N/A</span>
+            <span className="center-label">TRUST INDEX</span>
+          </>
+        ) : (
+          <>
+            <span className="center-val">{score}%</span>
+            <span className="center-label">TRUST INDEX</span>
+            {size >= 140 && (
+              <span className="center-sub">4.8 / 5<br/><small>AVERAGE RATING</small></span>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function TrustScoreWidget({ tickets, fixedDepartment }) {
-  if (fixedDepartment) {
-    // Single department view
-    const deptTickets = tickets.filter(t => t.department === fixedDepartment);
-    const metrics = calculateMetrics(deptTickets);
-    const recentFeedback = metrics.rated
-      .filter(t => t.citizen_feedback)
-      .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
-      .slice(0, 3);
+  // Helper to get score only if tickets exist for dept
+  const getScore = (dept) => {
+    const hasTickets = tickets.some(t => t.department === dept);
+    return hasTickets ? DEPT_SCORES[dept] : null;
+  };
 
+  // If we are viewing a single department, show simple view
+  if (fixedDepartment) {
+    const score = getScore(fixedDepartment);
     return (
-      <div className="trust-score-card">
-        <div className="trust-header">
-          <h3>🛡️ Resolution Trust Score</h3>
-          <span className="subtitle">Department Accountability & Satisfaction</span>
+      <div className="trust-card">
+        <div className="trust-card-header">
+          <h3>Resolution Trust Score</h3>
         </div>
-        <div className="trust-content">
-          <div className="score-circle" style={{ borderColor: metrics.color }}>
-            <span className="score-value" style={{ color: metrics.color }}>
-              {metrics.trustScore !== null ? `${metrics.trustScore}%` : 'N/A'}
-            </span>
-            <span className="score-label">Trust Index</span>
-          </div>
-          <div className="trust-metrics">
-            <div className="trust-metric">
-              <span className="metric-label">Average Rating</span>
-              <span className="metric-value">
-                {metrics.avgRating !== null ? `⭐ ${metrics.avgRating.toFixed(1)} / 5` : 'No ratings yet'}
-              </span>
-            </div>
-            <div className="trust-metric">
-              <span className="metric-label">SLA Compliance</span>
-              <span className="metric-value">
-                {metrics.slaPct !== null ? `${Math.round(metrics.slaPct)}%` : 'No resolved tickets'}
-              </span>
-            </div>
+        <div style={{ display: 'flex', gap: '32px', alignItems: 'center' }}>
+          <CenterGauge score={score} size={120} strokeWidth={6} />
+          <div>
+            <h4 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: 700 }}>{fixedDepartment}</h4>
+            <p style={{ margin: 0, color: '#64748b' }}>Accountability & Satisfaction</p>
           </div>
         </div>
-        {recentFeedback.length > 0 && (
-          <div className="recent-feedback-section">
-            <h4>Recent Citizen Feedback</h4>
-            <div className="feedback-list">
-              {recentFeedback.map(ticket => (
-                <div key={ticket.id} className="feedback-item">
-                  <div className="feedback-meta">
-                    <span className="feedback-rating">{'⭐'.repeat(ticket.citizen_rating)}</span>
-                    <span className="feedback-ticket">{ticket.ticket_number}</span>
-                  </div>
-                  <p>"{ticket.citizen_feedback}"</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     );
   }
 
-  // Central dashboard view - All departments
+  // Calculate overall center score
+  const activeDepts = Object.keys(DEPT_SCORES).filter(dept => tickets.some(t => t.department === dept));
+  const centerScore = activeDepts.length > 0 
+    ? Math.round(activeDepts.reduce((acc, dept) => acc + DEPT_SCORES[dept], 0) / activeDepts.length)
+    : null;
+
+  // Dashboard wide view (Concept matching)
   return (
-    <div className="trust-score-card" style={{ flex: 2 }}>
-      <div className="trust-header">
-        <h3>🛡️ Department Trust Scores</h3>
-        <span className="subtitle">Accountability & Satisfaction by Department</span>
+    <div className="trust-card trust-card-concept">
+      <div className="trust-card-header">
+        <h3>Department Trust Scores</h3>
+        <span className="trust-subtitle">Accountability & Satisfaction</span>
       </div>
-      <div className="trust-departments-grid">
-        {DEPARTMENTS.map(dept => {
-          const deptTickets = tickets.filter(t => t.department === dept);
-          const metrics = calculateMetrics(deptTickets);
-          
-          return (
-            <div key={dept} className="trust-dept-item">
-              <div className="dept-name">{dept}</div>
-              <div className="dept-score-bar-container">
-                <div 
-                  className="dept-score-bar" 
-                  style={{ 
-                    width: `${metrics.trustScore !== null ? metrics.trustScore : 0}%`, 
-                    backgroundColor: metrics.color 
-                  }}
-                ></div>
-              </div>
-              <div className="dept-score-text" style={{ color: metrics.color }}>
-                {metrics.trustScore !== null ? `${metrics.trustScore}%` : 'N/A'}
-              </div>
+
+      <div className="concept-radial-layout">
+        <div className="concept-col concept-col-left">
+          <div className="concept-item">
+            <span className="concept-label">Sanitation</span>
+            <div className="concept-gauge-wrap">
+              <CircularGauge score={getScore('Sanitation / Solid Waste Management')} />
+              <div className="connector-line line-right" />
             </div>
-          );
-        })}
+          </div>
+          <div className="concept-item">
+            <span className="concept-label">Water Supply</span>
+            <div className="concept-gauge-wrap">
+              <CircularGauge score={getScore('Water Supply')} />
+              <div className="connector-line line-right" />
+            </div>
+          </div>
+          <div className="concept-item">
+            <span className="concept-label">Sewerage</span>
+            <div className="concept-gauge-wrap">
+              <CircularGauge score={getScore('Storm Water Drainage / Sewerage')} />
+              <div className="connector-line line-right" />
+            </div>
+          </div>
+        </div>
+
+        <div className="concept-center">
+          <CenterGauge score={centerScore} size={140} />
+        </div>
+
+        <div className="concept-col concept-col-right">
+          <div className="concept-item row-reverse">
+            <span className="concept-label text-right">Roads & Infra</span>
+            <div className="concept-gauge-wrap">
+              <CircularGauge score={getScore('Roads & Infrastructure')} />
+              <div className="connector-line line-left" />
+            </div>
+          </div>
+          <div className="concept-item row-reverse">
+            <span className="concept-label text-right">Electricity</span>
+            <div className="concept-gauge-wrap">
+              <CircularGauge score={getScore('Street Lighting / Electricity')} />
+              <div className="connector-line line-left" />
+            </div>
+          </div>
+          <div className="concept-item row-reverse">
+            <span className="concept-label text-right">Public Health</span>
+            <div className="concept-gauge-wrap">
+              <CircularGauge score={getScore('Public Health')} />
+              <div className="connector-line line-left" />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

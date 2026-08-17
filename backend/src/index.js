@@ -20,6 +20,7 @@ const triggerCallRouter = require('./routes/triggerCall');
 const bolnaWebhookRouter = require('./routes/bolnaWebhook');
 const summaryRouter = require('./routes/summary');
 const ticketsRouter = require('./routes/tickets');
+const insightsRouter = require('./routes/insights');
 
 // Pass the bot instance to the Bolna webhook so it can send Telegram messages
 bolnaWebhookRouter.setBot(bot);
@@ -54,6 +55,7 @@ app.use('/webhook/bolna', bolnaWebhookRouter);
 app.use('/api', triggerCallRouter);
 app.use('/api/summary', summaryRouter);
 app.use('/api/tickets', ticketsRouter);
+app.use('/api/insights', insightsRouter);
 
 // ─── Start server ───────────────────────────────────────────────────────────
 app.listen(PORT, async () => {

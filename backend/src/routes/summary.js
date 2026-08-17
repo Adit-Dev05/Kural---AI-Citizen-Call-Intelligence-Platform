@@ -21,17 +21,48 @@ router.get('/', async (req, res) => {
       return res.json({ summary: 'There are currently no open or active complaints in the system. The city is running smoothly.' });
     }
 
-    // 2. Prepare data for Gemini
-    const ticketData = tickets.map(t => 
-      `- [${t.department}] ${t.issue_type} at ${t.location} (Urgency: ${t.urgency}, Sentiment: ${t.sentiment}, Source: ${t.source})`
-    ).join('\n');
+    // 2. Compute structured stats for the prompt
+    const totalOpen = tickets.length;
+    const urgentTickets = tickets.filter(t => t.urgency === 'urgent');
+    
+    // Department-wise counts
+    const deptCounts = {};
+    tickets.forEach(t => {
+      deptCounts[t.department] = (deptCounts[t.department] || 0) + 1;
+    });
+    const deptBreakdown = Object.entries(deptCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([dept, count]) => `${dept}: ${count}`)
+      .join(', ');
 
-    const prompt = `You are a Chief Operations AI for a city.
-Review the following list of active citizen complaints and provide a highly professional, 2-to-3 sentence executive situational summary for the city officers.
-Focus on clusters of issues, high-urgency emergencies, and overarching themes. Do not list every single ticket. Keep it extremely concise and actionable.
+    // Location clusters for urgent tickets
+    const locationClusters = {};
+    urgentTickets.forEach(t => {
+      const loc = t.location || 'Unknown';
+      locationClusters[loc] = (locationClusters[loc] || 0) + 1;
+    });
+    const hotspotData = Object.entries(locationClusters)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([loc, count]) => `${loc} (${count} urgent)`)
+      .join(', ');
 
-Active Tickets:
-${ticketData}`;
+    const prompt = `You are a Chief Operations AI for a city municipal corporation.
+Generate a crisp, actionable executive briefing for city officers based on these EXACT numbers. Do NOT invent any numbers — use only what is given below.
+
+DATA:
+- Total open/unresolved tickets right now: ${totalOpen}
+- Urgent tickets: ${urgentTickets.length}
+- Department-wise breakdown: ${deptBreakdown}
+- Top urgent hotspots: ${hotspotData || 'None'}
+
+RULES:
+1. Start with the total open/unresolved ticket count in the first sentence.
+2. Then mention the department-wise ticket counts in one sentence.
+3. End with one sentence about the most critical hotspot or urgent situation requiring immediate attention.
+4. Use ONLY the exact numbers provided above. Do NOT hallucinate or estimate.
+5. Do NOT include any title, header, or prefix. Do NOT use markdown formatting. Plain text only.
+6. Keep it to exactly 3 sentences. Be deliberate and professional.`;
 
     // 3. Call Gemini
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);

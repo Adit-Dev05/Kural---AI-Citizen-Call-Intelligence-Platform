@@ -12,25 +12,23 @@ const { GoogleGenerativeAI, SchemaType } = require('@google/generative-ai');
 
 // ─── Fixed Department Taxonomy ──────────────────────────────────────────────
 const VALID_DEPARTMENTS = [
-  'Sanitation',
-  'Water Supply',
-  'Electricity',
+  'Sanitation / Solid Waste Management',
   'Roads & Infrastructure',
-  'Health Services',
-  'Police',
-  'Fire Department',
+  'Water Supply',
+  'Storm Water Drainage / Sewerage',
+  'Street Lighting / Electricity',
+  'Public Health',
   'General Grievance',
 ];
 
 // ─── Keyword Sets for Rule-Based Fallback ───────────────────────────────────
 const DEPARTMENT_KEYWORDS = {
-  'Sanitation': ['garbage', 'trash', 'waste', 'rubbish', 'dump', 'sewage', 'sewer', 'drain', 'drainage', 'gutter', 'overflow', 'foul smell', 'stink', 'public toilet', 'latrine', 'landfill', 'municipal waste'],
-  'Water Supply': ['water shortage', 'no water', 'water supply', 'tap water', 'pipeline', 'pipe leak', 'pipe burst', 'contaminated water', 'dirty water', 'water tank', 'borewell', 'water tanker', 'low water pressure', 'water cut'],
-  'Electricity': ['power cut', 'power outage', 'electricity', 'voltage', 'transformer', 'streetlight', 'street light', 'fused', 'short circuit', 'electric wire', 'power meter', 'blackout', 'load shedding', 'electric pole', 'sparking wire'],
-  'Roads & Infrastructure': ['pothole', 'road damage', 'broken road', 'footpath', 'pavement', 'bridge', 'culvert', 'construction debris', 'road block', 'damaged road', 'broken pavement'],
-  'Health Services': ['hospital', 'clinic', 'ambulance', 'disease outbreak', 'epidemic', 'dengue', 'malaria', 'medical emergency', 'doctor', 'nurse', 'vaccination', 'primary health centre'],
-  'Police': ['theft', 'robbery', 'crime', 'noise complaint', 'harassment', 'assault', 'traffic violation', 'illegal parking', 'stalking', 'safety concern', 'law and order'],
-  'Fire Department': ['fire', 'burning', 'smoke', 'gas leak', 'explosion', 'cylinder blast', 'rescue'],
+  'Sanitation / Solid Waste Management': ['garbage', 'trash', 'waste', 'rubbish', 'dump', 'foul smell', 'stink', 'public toilet', 'latrine', 'landfill', 'municipal waste', 'sweeper', 'dustbin', 'cleaning', 'sanitation'],
+  'Roads & Infrastructure': ['pothole', 'road damage', 'broken road', 'footpath', 'pavement', 'bridge', 'culvert', 'construction debris', 'road block', 'damaged road', 'broken pavement', 'asphalt', 'tar', 'speed breaker'],
+  'Water Supply': ['water shortage', 'no water', 'water supply', 'tap water', 'pipeline', 'pipe leak', 'pipe burst', 'contaminated water', 'dirty water', 'water tank', 'borewell', 'water tanker', 'low water pressure', 'water cut', 'drinking water'],
+  'Storm Water Drainage / Sewerage': ['sewage', 'sewer', 'drain', 'drainage', 'gutter', 'overflow', 'clogged drain', 'manhole', 'water logging', 'flooded street', 'storm water'],
+  'Street Lighting / Electricity': ['power cut', 'power outage', 'electricity', 'voltage', 'transformer', 'streetlight', 'street light', 'fused', 'short circuit', 'electric wire', 'power meter', 'blackout', 'load shedding', 'electric pole', 'sparking wire', 'lamp post'],
+  'Public Health': ['hospital', 'clinic', 'ambulance', 'disease outbreak', 'epidemic', 'dengue', 'malaria', 'medical emergency', 'doctor', 'nurse', 'vaccination', 'primary health centre', 'mosquito', 'stray dog', 'animal carcass'],
 };
 
 const URGENT_KEYWORDS = ['fire', 'flood', 'flooding', 'gas leak', 'electrocution', 'collapsed', 'drowning', 'emergency', 'life threatening'];

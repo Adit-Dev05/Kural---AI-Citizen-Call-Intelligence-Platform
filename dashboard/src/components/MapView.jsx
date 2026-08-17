@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet.heat';
 
-// Fix Vite asset paths for Leaflet marker icons
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIconRetina from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -13,52 +13,24 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
-// Demo fallback coordinates for Chennai locations
-const LOCATION_COORDS = {
-  'ambattur': [13.1146, 80.1548],
-  'vaishnavi nagar': [13.1250, 80.1600],
-  'guindy': [13.0067, 80.2206],
-  'adyar': [13.0063, 80.2574],
-  'velachery': [12.9802, 80.2228],
-  'anna nagar': [13.0850, 80.2101],
-};
-
 function getCoordinates(ticket) {
-  // 1. Check if ticket has explicit coordinates in database
   if (ticket.latitude && ticket.longitude) {
     const lat = parseFloat(ticket.latitude);
     const lng = parseFloat(ticket.longitude);
-    if (!isNaN(lat) && !isNaN(lng)) {
-      return [lat, lng];
-    }
+    if (!isNaN(lat) && !isNaN(lng)) return [lat, lng];
   }
-
-  // 2. Check location string mapping
-  if (ticket.location && ticket.location !== 'Not specified') {
-    const locLower = ticket.location.toLowerCase();
-    for (const [key, coords] of Object.entries(LOCATION_COORDS)) {
-      if (locLower.includes(key)) {
-        // Add minor jitter so markers on the same location don't overlap completely
-        const jitterLat = (Math.random() - 0.5) * 0.003;
-        const jitterLng = (Math.random() - 0.5) * 0.003;
-        return [coords[0] + jitterLat, coords[1] + jitterLng];
-      }
-    }
-  }
-
-  // 3. General fallback centered in Chennai with random jitter
+  // Fallback: center of Chennai with jitter
   const jitterLat = (Math.random() - 0.5) * 0.08;
   const jitterLng = (Math.random() - 0.5) * 0.08;
   return [13.0827 + jitterLat, 80.2707 + jitterLng];
 }
 
-export default function MapView({ tickets }) {
+export default function MapView({ tickets, mode = 'pins' }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
-  const markersRef = useRef([]);
+  const layerRef = useRef(null);
 
   useEffect(() => {
-    // Initialize map only once
     if (!mapInstanceRef.current && mapContainerRef.current) {
       mapInstanceRef.current = L.map(mapContainerRef.current, {
         zoomControl: true,
@@ -67,11 +39,10 @@ export default function MapView({ tickets }) {
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
-        attribution: '&copy; <a href="https://openstreetmap.org">OpenStreetMap</a> contributors'
+        attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       }).addTo(mapInstanceRef.current);
     }
 
-    // Cleanup function on unmount
     return () => {
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
@@ -80,29 +51,45 @@ export default function MapView({ tickets }) {
     };
   }, []);
 
-  // Update markers when tickets change
   useEffect(() => {
     if (!mapInstanceRef.current) return;
 
-    // Clear existing markers
-    markersRef.current.forEach(marker => {
-      mapInstanceRef.current.removeLayer(marker);
-    });
-    markersRef.current = [];
+    // Clear previous layer
+    if (layerRef.current) {
+      mapInstanceRef.current.removeLayer(layerRef.current);
+      layerRef.current = null;
+    }
 
-    // Add new markers
     const activeTickets = tickets.filter(t => t.status !== 'resolved');
 
+    const mainGroup = L.layerGroup();
+
+    if (mode === 'heatmap') {
+      // Heatmap mode layer
+      const heatData = activeTickets.map(ticket => {
+        const coords = getCoordinates(ticket);
+        const intensity = ticket.urgency === 'urgent' ? 1.0 : ticket.urgency === 'medium' ? 0.6 : 0.3;
+        return [...coords, intensity];
+      });
+
+      if (heatData.length > 0) {
+        L.heatLayer(heatData, {
+          radius: 45,
+          blur: 35,
+          maxZoom: 12,
+          max: 0.8,
+          gradient: { 0.2: '#3b82f6', 0.4: '#22c55e', 0.6: '#f59e0b', 0.8: '#ef4444', 1.0: '#dc2626' }
+        }).addTo(mainGroup);
+      }
+    }
+
+    // Always add markers for visual clarity
     activeTickets.forEach(ticket => {
       const coords = getCoordinates(ticket);
-      if (!coords) return;
-
       const isEmergency = ticket.source === 'emergency';
-      const markerColorClass = isEmergency ? 'marker-emergency' : 'marker-normal';
 
-      // Custom icon for Emergency vs Normal
       const customIcon = L.divIcon({
-        className: `custom-map-marker ${markerColorClass}`,
+        className: `custom-map-marker ${isEmergency ? 'marker-emergency' : 'marker-normal'}`,
         html: `<div class="marker-pin">${isEmergency ? '🚨' : '📍'}</div>`,
         iconSize: [30, 42],
         iconAnchor: [15, 42],
@@ -119,26 +106,27 @@ export default function MapView({ tickets }) {
             <p><strong>Summary:</strong> ${ticket.summary || '(no summary)'}</p>
             <p><strong>Department:</strong> ${ticket.department}</p>
             <p><strong>Location:</strong> ${ticket.location || 'Not specified'}</p>
+            <p><strong>Status:</strong> ${ticket.status}, <strong>Urgency:</strong> <span style="color:${ticket.urgency === 'urgent' ? '#ef4444' : '#f59e0b'}">${ticket.urgency}</span></p>
           </div>
         </div>
       `;
 
-      const marker = L.marker(coords, { icon: customIcon })
+      L.marker(coords, { icon: customIcon })
         .bindPopup(popupContent)
-        .addTo(mapInstanceRef.current);
-
-      markersRef.current.push(marker);
+        .addTo(mainGroup);
     });
 
-  }, [tickets]);
+    mainGroup.addTo(mapInstanceRef.current);
+    layerRef.current = mainGroup;
+  }, [tickets, mode]);
 
   return (
     <div className="map-view-card">
       <div className="map-header">
-        <h3>📍 Live Grievance Map</h3>
-        <span className="map-badge">Live Tracking</span>
+        <h3>{mode === 'heatmap' ? '🔥 Grievance Heatmap' : '📍 Live Grievance Map'}</h3>
+        <span className="map-badge">LIVE TRACKING</span>
       </div>
-      <div ref={mapContainerRef} className="map-container" style={{ height: '350px', width: '100%', borderRadius: '8px' }} />
+      <div ref={mapContainerRef} className="map-container" style={{ height: '380px', width: '100%', borderRadius: '8px' }} />
     </div>
   );
 }
