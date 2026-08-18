@@ -774,13 +774,28 @@ body {
   border: 1px solid var(--border);
 }
 
-.dup-badge {
-  font-size: 10px;
+.stack-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   background: var(--accent-light);
   color: var(--accent);
+  border: 1px solid var(--accent);
+  font-size: 11px;
+  font-weight: 700;
   padding: 2px 6px;
   border-radius: 4px;
-  font-weight: 700;
+  box-shadow: 2px 2px 0px rgba(99, 102, 241, 0.2), 4px 4px 0px rgba(99, 102, 241, 0.1);
+  margin-left: 8px;
+  transition: transform 0.1s;
+}
+
+.row-stacked-parent {
+  box-shadow: inset 4px 0 0 var(--accent) !important;
+}
+
+.row-stacked-parent:hover .stack-badge {
+  transform: translateY(-1px) translateX(-1px);
 }
 
 .table-empty {

@@ -63,42 +63,70 @@ async function generateTicketNumber() {
   return `GC-${lastNumber + 1}`;
 }
 
-/**
- * Check for a duplicate ticket: same department + matching location, still open,
- * created within the last 48 hours.
- *
- * This is intentionally conservative — a false negative (two tickets for the same
- * issue) is less harmful than a false positive (merging genuinely distinct complaints).
- *
- * @param {string} department
- * @param {string} location
- * @returns {Promise<Object|null>} The existing ticket if a duplicate is found, null otherwise
- */
-async function checkDuplicate(department, location) {
-  // Don't match on "Not specified" locations — too generic
-  if (!location || location === 'Not specified') {
-    return null;
-  }
+function getDistanceKm(lat1, lon1, lat2, lon2) {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return Infinity;
+  const R = 6371; // km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
+/**
+ * Check for a duplicate ticket: same department + matching location (by GPS or text overlap), still open,
+ * created within the last 48 hours.
+ */
+async function checkDuplicate(department, location, lat = null, lon = null) {
   const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
 
-  const { data, error } = await supabase
+  const { data: candidates, error } = await supabase
     .from('tickets')
     .select('*')
     .eq('department', department)
-    .ilike('location', location) // case-insensitive match
     .in('status', ['open', 'in_progress'])
     .gte('created_at', fortyEightHoursAgo)
-    .is('duplicate_of', null) // don't chain duplicates off other duplicates
-    .order('created_at', { ascending: false })
-    .limit(1);
+    .is('duplicate_of', null)
+    .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error('[Tickets] Error checking duplicates:', error);
-    return null; // fail open — create a new ticket rather than crashing
+  if (error || !candidates || candidates.length === 0) return null;
+
+  for (const ticket of candidates) {
+    // 1. If GPS coordinates are available, check distance (threshold: 350 meters)
+    if (lat && lon && ticket.latitude && ticket.longitude) {
+      const distance = getDistanceKm(lat, lon, ticket.latitude, ticket.longitude);
+      if (distance <= 0.35) {
+        console.log(`[Duplicate] GPS Match! Distance: ${distance.toFixed(3)} km between new ticket and ${ticket.ticket_number}`);
+        return ticket;
+      }
+    }
+
+    // 2. Fallback to fuzzy text matching if coordinates are missing or not matched by GPS
+    if (location && location !== 'Not specified' && ticket.location && ticket.location !== 'Not specified') {
+      const loc1 = location.toLowerCase();
+      const loc2 = ticket.location.toLowerCase();
+
+      // Check exact match or inclusion
+      if (loc1 === loc2 || loc1.includes(loc2) || loc2.includes(loc1)) {
+        console.log(`[Duplicate] Text Match! "${location}" matched "${ticket.location}"`);
+        return ticket;
+      }
+
+      // Check shared unique words (e.g. "Neduncheri", "Poonamallee")
+      const words1 = loc1.replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 4);
+      const words2 = loc2.replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 4);
+      const shared = words1.filter(w => words2.includes(w));
+      if (shared.length >= 2) {
+        console.log(`[Duplicate] Fuzzy Word Match! Shared words: ${shared.join(', ')}`);
+        return ticket;
+      }
+    }
   }
 
-  return data && data.length > 0 ? data[0] : null;
+  return null;
 }
 
 /**

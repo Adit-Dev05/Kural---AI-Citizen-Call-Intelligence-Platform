@@ -91,39 +91,48 @@ export default function TicketQueue({ tickets, newTicketIds, fixedDepartment }) 
 function TicketTableRow({ ticket, isNew, onStatusChange, allTickets }) {
   const [expanded, setExpanded] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
-
+ 
   const priorityClass = {
     urgent: 'priority-urgent',
     medium: 'priority-medium',
     low: 'priority-low',
   }[ticket.urgency] || 'priority-low';
-
+ 
   const priorityLabel = {
     urgent: 'Urgent',
     medium: 'Medium',
     low: 'Low',
   }[ticket.urgency] || ticket.urgency;
-
+ 
   const statusClass = {
     open: 'status-open',
     in_progress: 'status-progress',
     resolved: 'status-resolved',
     incomplete: 'status-incomplete',
   }[ticket.status] || '';
-
+ 
   const statusLabel = {
     open: 'Open',
     in_progress: 'In Progress',
     resolved: 'Resolved',
     incomplete: 'Incomplete',
   }[ticket.status] || ticket.status;
-
+ 
   const duplicates = allTickets.filter(t => t.duplicate_of === ticket.id);
-
+ 
   return (
     <>
-      <tr className={`${isNew ? 'row-new' : ''} ${ticket.source === 'emergency' ? 'row-emergency' : ''}`} onClick={() => setExpanded(!expanded)} style={{ cursor: 'pointer' }}>
-        <td className="col-id">{ticket.ticket_number}</td>
+      <tr className={`${isNew ? 'row-new' : ''} ${ticket.source === 'emergency' ? 'row-emergency' : ''} ${duplicates.length > 0 ? 'row-stacked-parent' : ''}`} onClick={() => setExpanded(!expanded)} style={{ cursor: 'pointer' }}>
+        <td className="col-id">
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            {ticket.ticket_number}
+            {duplicates.length > 0 && (
+              <span className="stack-badge" title={`${duplicates.length + 1} citizens reported this`}>
+                🗂️ +{duplicates.length}
+              </span>
+            )}
+          </div>
+        </td>
         <td className="col-summary">
           <div className="summary-text">{ticket.summary || '(no summary)'}</div>
           <div className="summary-location">📍 {ticket.location || 'Not specified'}</div>
@@ -135,6 +144,7 @@ function TicketTableRow({ ticket, isNew, onStatusChange, allTickets }) {
           </span>
         </td>
         <td>
+          <span style={{ display: 'none' }}><SLATimer createdAt={ticket.created_at} status={ticket.status} /></span>
           <SLATimer createdAt={ticket.created_at} status={ticket.status} />
         </td>
         <td className="col-dept">{ticket.department}</td>
@@ -158,41 +168,63 @@ function TicketTableRow({ ticket, isNew, onStatusChange, allTickets }) {
           {ticket.recording_url && (
             <a href={ticket.recording_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="action-link" title="Listen">🎧</a>
           )}
-          {duplicates.length > 0 && <span className="dup-badge">+{duplicates.length}</span>}
         </td>
       </tr>
-
+ 
       {expanded && (
         <tr className="detail-row">
-          <td colSpan="7">
-            <div className="detail-panel">
-              {ticket.source === 'emergency' ? (
-                <div className="detail-section">
-                  <strong>Emergency Live Location</strong>
-                  <p>Lat: <code>{ticket.latitude}</code>, Lng: <code>{ticket.longitude}</code></p>
-                  {ticket.latitude && ticket.longitude && (
-                    <a href={`https://www.google.com/maps?q=${ticket.latitude},${ticket.longitude}`} target="_blank" rel="noopener noreferrer" className="map-link">🗺️ Open in Google Maps</a>
+          <td colSpan="8">
+            <div className="detail-panel" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: '300px' }}>
+                  {ticket.source === 'emergency' ? (
+                    <div className="detail-section">
+                      <strong>Emergency Live Location</strong>
+                      <p>Lat: <code>{ticket.latitude}</code>, Lng: <code>{ticket.longitude}</code></p>
+                      {ticket.latitude && ticket.longitude && (
+                        <a href={`https://www.google.com/maps?q=${ticket.latitude},${ticket.longitude}`} target="_blank" rel="noopener noreferrer" className="map-link">🗺️ Open in Google Maps</a>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="detail-section">
+                      <div className="detail-section-header">
+                        <strong>{ticket.source === 'call' ? 'Call Transcript' : 'Complaint Text'}</strong>
+                        {ticket.source === 'call' && (
+                          <button className="btn-sm" onClick={() => setShowTranscript(!showTranscript)}>
+                            {showTranscript ? 'Hide' : 'View Transcript'}
+                          </button>
+                        )}
+                      </div>
+                      {(ticket.source !== 'call' || showTranscript) && (
+                        <p className="transcript-block" style={{ whiteSpace: 'pre-wrap' }}>{ticket.raw_transcript || 'No transcript available.'}</p>
+                      )}
+                    </div>
                   )}
-                </div>
-              ) : (
-                <div className="detail-section">
-                  <div className="detail-section-header">
-                    <strong>{ticket.source === 'call' ? 'Call Transcript' : 'Complaint Text'}</strong>
-                    {ticket.source === 'call' && (
-                      <button className="btn-sm" onClick={() => setShowTranscript(!showTranscript)}>
-                        {showTranscript ? 'Hide' : 'View Transcript'}
-                      </button>
+                  <div className="detail-section" style={{ marginTop: '12px' }}>
+                    <strong>Issue Type:</strong> {ticket.issue_type || 'General'}
+                    {ticket.sentiment && ticket.sentiment !== 'neutral' && (
+                      <span className="sentiment-tag">{ticket.sentiment === 'angry' ? '💢 Angry' : '😡 Frustrated'}</span>
                     )}
                   </div>
-                  {(ticket.source !== 'call' || showTranscript) && (
-                    <p className="transcript-block">{ticket.raw_transcript || 'No transcript available.'}</p>
-                  )}
                 </div>
-              )}
-              <div className="detail-section">
-                <strong>Issue Type:</strong> {ticket.issue_type || 'General'}
-                {ticket.sentiment && ticket.sentiment !== 'neutral' && (
-                  <span className="sentiment-tag">{ticket.sentiment === 'angry' ? '💢 Angry' : '😡 Frustrated'}</span>
+ 
+                {duplicates.length > 0 && (
+                  <div style={{ flex: 1, minWidth: '300px', borderLeft: '1px solid var(--border)', paddingLeft: '24px' }}>
+                    <strong style={{ display: 'block', marginBottom: '8px', color: 'var(--text)' }}>
+                      🗂️ Linked Duplicate Reports ({duplicates.length})
+                    </strong>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '180px', overflowY: 'auto' }}>
+                      {duplicates.map(dup => (
+                        <div key={dup.id} style={{ padding: '8px 12px', background: 'var(--neutral-bg)', border: '1px solid var(--border)', borderRadius: '6px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                            <span><strong>{dup.ticket_number}</strong> ({dup.source})</span>
+                            <span>{new Date(dup.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                          <div style={{ fontSize: '12px', color: 'var(--text)' }}>{dup.summary || 'Duplicate report matching this issue.'}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>

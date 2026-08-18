@@ -441,7 +441,7 @@ async function handleTextComplaintWithLocation(chatId, issueText, lat, lon) {
   const address = await reverseGeocode(lat, lon);
 
   // Check for duplicates
-  const existingTicket = await checkDuplicate(classification.department, address);
+  const existingTicket = await checkDuplicate(classification.department, address, lat, lon);
 
   const ticketData = {
     source: 'text',
@@ -493,24 +493,45 @@ async function finalizeTextComplaint(chatId, ticketData, existingTicket) {
   }
 }
 
-/**
- * Update an existing ticket with GPS location
- */
 async function handleTicketLocationUpdate(chatId, ticketId, lat, lon) {
   await safeSendMessage(chatId, '⏳ Saving location...', { reply_markup: { remove_keyboard: true } });
   
   const address = await reverseGeocode(lat, lon);
   
+  // Get ticket's department to search for duplicates in that area
+  const { data: ticket, error: fetchError } = await supabase
+    .from('tickets')
+    .select('department')
+    .eq('id', ticketId)
+    .single();
+    
+  if (fetchError || !ticket) {
+    console.error('[Telegram] Failed to fetch ticket for duplicate checking:', fetchError);
+    return;
+  }
+
+  // Check if there is an existing ticket in that department close by (within 350m)
+  const existingTicket = await checkDuplicate(ticket.department, address, lat, lon);
+
+  const updateData = { latitude: lat, longitude: lon, location: address };
+  if (existingTicket && existingTicket.id !== ticketId) {
+    updateData.duplicate_of = existingTicket.id;
+  }
+
   const { error } = await supabase
     .from('tickets')
-    .update({ latitude: lat, longitude: lon, location: address })
+    .update(updateData)
     .eq('id', ticketId);
     
   if (error) {
     console.error('[Telegram] Failed to update ticket location:', error);
     await safeSendMessage(chatId, '❌ Failed to save your location. You can track your ticket using the menu.');
   } else {
-    await safeSendMessage(chatId, '✅ Location saved successfully! We will dispatch the team to this exact spot.', { reply_markup: MAIN_MENU_KEYBOARD });
+    let msg = '✅ Location saved successfully! We will dispatch the team to this exact spot.';
+    if (existingTicket && existingTicket.id !== ticketId) {
+      msg += `\n\nℹ️ A similar complaint (${existingTicket.ticket_number}) is already being tracked in this area — your report has been linked to it.`;
+    }
+    await safeSendMessage(chatId, msg, { reply_markup: MAIN_MENU_KEYBOARD });
   }
 }
 
