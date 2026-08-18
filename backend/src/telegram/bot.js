@@ -13,7 +13,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const supabase = require('../supabase');
 const { setState, getState, clearState } = require('./userState');
 const { classifyComplaint } = require('../services/gemini');
-const { checkDuplicate, createTicket, lookupTicket } = require('../services/tickets');
+const { checkDuplicate, createTicket, lookupTicket, reverseGeocode } = require('../services/tickets');
 
 // Initialize bot — webhook mode, no polling
 // We don't let the library open its own web server; Express will
@@ -120,12 +120,14 @@ bot.on('contact', async (msg) => {
     reply_markup: { remove_keyboard: true },
   });
 
-  // Check for an existing pending or in-progress call to prevent double-dialing
+  // Check for an existing pending or in-progress call in the last 5 minutes to prevent double-dialing
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
   const { data: existingCalls } = await supabase
     .from('call_requests')
     .select('*')
     .eq('telegram_chat_id', String(chatId))
     .in('status', ['requested', 'in_progress'])
+    .gt('created_at', fiveMinutesAgo)
     .order('created_at', { ascending: false })
     .limit(1);
 
@@ -201,10 +203,30 @@ bot.on('message', async (msg) => {
   // Handle location messages
   if (msg.location) {
     const state = getState(chatId);
-    if (state && state.mode === 'awaiting_emergency_location') {
+    if (!state) return;
+
+    if (state.mode === 'awaiting_emergency_location') {
       await handleEmergencyLocation(chatId, msg.location, state.emergency_type);
       clearState(chatId);
+      return;
     }
+
+    if (state.mode === 'awaiting_location_gps') {
+      // Citizen shared GPS location for a text complaint
+      const issueText = state.issueText;
+      clearState(chatId);
+      await handleTextComplaintWithLocation(chatId, issueText, msg.location.latitude, msg.location.longitude);
+      return;
+    }
+
+    if (state.mode === 'awaiting_ticket_location') {
+      // Citizen shared GPS location for an existing ticket (e.g., after a call)
+      const ticketId = state.ticketId;
+      clearState(chatId);
+      await handleTicketLocationUpdate(chatId, ticketId, msg.location.latitude, msg.location.longitude);
+      return;
+    }
+
     return;
   }
 
@@ -222,10 +244,27 @@ bot.on('message', async (msg) => {
     return;
   }
 
-  if (state.mode === 'awaiting_text') {
-    // Citizen is describing their complaint via text
+  if (state.mode === 'awaiting_issue_text') {
+    // Citizen described the issue, now ask for GPS location
+    setState(chatId, { mode: 'awaiting_location_gps', issueText: msg.text });
+    await safeSendMessage(chatId, 
+      '📍 Please tap the button below to share your exact location for this issue:', 
+      {
+        reply_markup: {
+          keyboard: [[{ text: '📍 Share Location', request_location: true }]],
+          resize_keyboard: true,
+          one_time_keyboard: true,
+        }
+      }
+    );
+    return;
+  }
+
+  if (state.mode === 'awaiting_location_gps') {
+    // Citizen typed a text location instead of sharing GPS
+    const combinedText = `Issue: ${state.issueText}\nLocation: ${msg.text}`;
     clearState(chatId);
-    await handleTextComplaint(chatId, msg.text);
+    await handleTextComplaint(chatId, combinedText, null, null);
     return;
   }
 
@@ -294,13 +333,15 @@ async function handleEmergencyLocation(chatId, location, emergencyType) {
     gas_leak: 'Emergency: Gas leak reported'
   };
 
+  const address = await reverseGeocode(location.latitude, location.longitude);
+
   const ticketData = {
     source: 'emergency',
     telegram_chat_id: String(chatId),
     raw_transcript: null,
     issue_type: emergencyType,
     department: departmentMap[emergencyType],
-    location: null, // using lat/lng
+    location: address, // use reverse geocoded address
     latitude: location.latitude,
     longitude: location.longitude,
     emergency_type: emergencyType,
@@ -345,11 +386,10 @@ async function handleRegisterCall(chatId) {
 }
 
 async function handleRegisterText(chatId) {
-  setState(chatId, { mode: 'awaiting_text' });
+  setState(chatId, { mode: 'awaiting_issue_text' });
 
   await safeSendMessage(chatId,
-    '📝 Please describe your complaint in detail.\n\n' +
-    'Include the issue, location, and any relevant details. ' +
+    '📝 Please describe the issue you are facing.\n\n' +
     'You can write in any language.'
   );
 }
@@ -363,15 +403,12 @@ async function handleCheckStatus(chatId) {
 }
 
 /**
- * Process a text-based complaint: classify → check duplicates → create ticket → notify
+ * Process a text-based complaint when user typed a location instead of sharing GPS
  */
 async function handleTextComplaint(chatId, text) {
-  await safeSendMessage(chatId, '⏳ Analyzing your complaint...');
+  await safeSendMessage(chatId, '⏳ Analyzing your complaint...', { reply_markup: { remove_keyboard: true } });
 
-  // classifyComplaint never throws — it always returns a result with classified_by: 'ai' | 'rules'
   const classification = await classifyComplaint(text);
-
-  // Check for duplicates
   const existingTicket = await checkDuplicate(classification.department, classification.location);
 
   const ticketData = {
@@ -388,19 +425,57 @@ async function handleTextComplaint(chatId, text) {
     status: 'open',
   };
 
+  await finalizeTextComplaint(chatId, ticketData, existingTicket);
+}
+
+/**
+ * Process a text-based complaint with exact GPS coordinates
+ */
+async function handleTextComplaintWithLocation(chatId, issueText, lat, lon) {
+  await safeSendMessage(chatId, '⏳ Analyzing your complaint...', { reply_markup: { remove_keyboard: true } });
+
+  // Classify just the issue text
+  const classification = await classifyComplaint(issueText);
+  
+  // Reverse geocode the location
+  const address = await reverseGeocode(lat, lon);
+
+  // Check for duplicates
+  const existingTicket = await checkDuplicate(classification.department, address);
+
+  const ticketData = {
+    source: 'text',
+    telegram_chat_id: String(chatId),
+    raw_transcript: issueText,
+    issue_type: classification.issue_type,
+    department: classification.department,
+    location: address,
+    latitude: lat,
+    longitude: lon,
+    urgency: classification.urgency,
+    sentiment: classification.sentiment,
+    summary: classification.summary,
+    classified_by: classification.classified_by,
+    status: 'open',
+  };
+
+  await finalizeTextComplaint(chatId, ticketData, existingTicket);
+}
+
+async function finalizeTextComplaint(chatId, ticketData, existingTicket) {
   if (existingTicket) {
     ticketData.duplicate_of = existingTicket.id;
   }
 
   try {
     const ticket = await createTicket(ticketData);
-    const urgencyEmoji = { urgent: '🔴', medium: '🟡', low: '🟢' }[classification.urgency] || '🟢';
+    const urgencyEmoji = { urgent: '🔴', medium: '🟡', low: '🟢' }[ticketData.urgency] || '🟢';
 
     let response =
       `✅ Your complaint has been registered.\n\n` +
       `${urgencyEmoji} Ticket: <b>${ticket.ticket_number}</b>\n` +
-      `Department: ${classification.department}\n` +
-      `Summary: ${classification.summary}\n`;
+      `Department: ${ticketData.department}\n` +
+      `Summary: ${ticketData.summary}\n`;
 
     if (existingTicket) {
       response += `\nℹ️ A similar complaint (${existingTicket.ticket_number}) is already being tracked — your report has been linked to it.\n`;
@@ -415,6 +490,27 @@ async function handleTextComplaint(chatId, text) {
       `❌ We were unable to register your complaint right now due to a database issue. Please try again later.`,
       { reply_markup: MAIN_MENU_KEYBOARD }
     );
+  }
+}
+
+/**
+ * Update an existing ticket with GPS location
+ */
+async function handleTicketLocationUpdate(chatId, ticketId, lat, lon) {
+  await safeSendMessage(chatId, '⏳ Saving location...', { reply_markup: { remove_keyboard: true } });
+  
+  const address = await reverseGeocode(lat, lon);
+  
+  const { error } = await supabase
+    .from('tickets')
+    .update({ latitude: lat, longitude: lon, location: address })
+    .eq('id', ticketId);
+    
+  if (error) {
+    console.error('[Telegram] Failed to update ticket location:', error);
+    await safeSendMessage(chatId, '❌ Failed to save your location. You can track your ticket using the menu.');
+  } else {
+    await safeSendMessage(chatId, '✅ Location saved successfully! We will dispatch the team to this exact spot.', { reply_markup: MAIN_MENU_KEYBOARD });
   }
 }
 

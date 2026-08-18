@@ -9,6 +9,34 @@
 const supabase = require('../supabase');
 
 /**
+ * Reverse geocode latitude and longitude to a human-readable address.
+ * Uses Nominatim (OpenStreetMap).
+ *
+ * @param {number} lat - Latitude
+ * @param {number} lon - Longitude
+ * @returns {Promise<string>} Human-readable address or "Location Provided" if failed
+ */
+async function reverseGeocode(lat, lon) {
+  try {
+    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`, {
+      headers: { 'User-Agent': 'Kural-Hackathon-App/1.0' }
+    });
+    const data = await response.json();
+    
+    if (data && data.display_name) {
+      // Simplify the display name by removing the country and postcode if present
+      let address = data.display_name;
+      address = address.split(',').slice(0, 4).join(',').trim();
+      return address;
+    }
+    return "Location Provided";
+  } catch (err) {
+    console.error('[Geocoding] Reverse geocode failed:', err.message);
+    return "Location Provided";
+  }
+}
+
+/**
  * Generate the next ticket number by finding the current max.
  * Format: GC-NNNN (e.g. GC-1001, GC-1002, ...)
  * Starts at GC-1001 if no tickets exist.
@@ -17,7 +45,7 @@ async function generateTicketNumber() {
   const { data, error } = await supabase
     .from('tickets')
     .select('ticket_number')
-    .order('created_at', { ascending: false })
+    .order('ticket_number', { ascending: false })
     .limit(1);
 
   if (error) {
@@ -84,42 +112,75 @@ async function createTicket(ticketData) {
   let latitude = ticketData.latitude || null;
   let longitude = ticketData.longitude || null;
 
-  // Attempt to geocode the location if not explicitly provided
-  if (!latitude && !longitude && ticketData.location && ticketData.location !== 'Not specified') {
-    try {
-      // Append Chennai context for better matches, since Kural is Chennai-focused in this demo
-      const query = encodeURIComponent(`${ticketData.location}, Chennai, Tamil Nadu, India`);
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`, {
-        headers: { 'User-Agent': 'Kural-Hackathon-App/1.0' }
-      });
-      const geoData = await response.json();
-      if (geoData && geoData.length > 0) {
-        latitude = parseFloat(geoData[0].lat);
-        longitude = parseFloat(geoData[0].lon);
-        console.log(`[Geocoding] Resolved "${ticketData.location}" to ${latitude}, ${longitude}`);
-      }
-    } catch (err) {
-      console.error('[Geocoding] Failed to fetch coordinates:', err.message);
-    }
-  }
+  // Capture the location string for background geocoding before we delete it (if applicable)
+  const locationToGeocode = ticketData.broad_location || ticketData.location;
+
+  // Remove broad_location before inserting into DB so we don't violate schema (if it's strictly defined)
+  delete ticketData.broad_location;
 
   const { data, error } = await supabase
     .from('tickets')
     .insert({
       ticket_number: ticketNumber,
+      source: ticketData.source,
+      caller_phone: ticketData.caller_phone || null,
+      caller_name: ticketData.caller_name || null,
+      telegram_chat_id: ticketData.telegram_chat_id || null,
+      raw_transcript: ticketData.raw_transcript || null,
+      issue_type: ticketData.issue_type,
+      department: ticketData.department,
+      location: ticketData.location,
       latitude,
       longitude,
-      ...ticketData,
+      urgency: ticketData.urgency || 'low',
+      sentiment: ticketData.sentiment || 'neutral',
+      summary: ticketData.summary,
+      classified_by: ticketData.classified_by || 'rules',
+      status: ticketData.status || 'open',
+      duplicate_of: ticketData.duplicate_of || null,
+      recording_url: ticketData.recording_url || null,
     })
     .select()
     .single();
 
-  if (error) {
-    console.error('[Tickets] Error creating ticket:', error);
-    throw error;
+  if (error) throw error;
+
+  // Background Geocoding: Do not await this, let it run in the background to keep response times fast
+  if (!latitude && !longitude && locationToGeocode && locationToGeocode !== 'Not specified') {
+    (async () => {
+      try {
+        let cleanLoc = locationToGeocode
+          .replace(/no\.?\s*\d+/gi, '')
+          .replace(/\d+(st|nd|rd|th)\s+(cross|street|main road|avenue|lane)/gi, '')
+          .replace(/chennai\s*:?\s*\d{6}/gi, '')
+          .replace(/[:,]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+          
+        if (!cleanLoc || cleanLoc.length < 3) cleanLoc = locationToGeocode;
+
+        const query = encodeURIComponent(`${cleanLoc}, Chennai, Tamil Nadu, India`);
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`, {
+          headers: { 'User-Agent': 'Kural-Hackathon-App/1.0' }
+        });
+        const geoData = await response.json();
+        if (geoData && geoData.length > 0) {
+          const bgLat = parseFloat(geoData[0].lat);
+          const bgLon = parseFloat(geoData[0].lon);
+          
+          await supabase
+            .from('tickets')
+            .update({ latitude: bgLat, longitude: bgLon })
+            .eq('id', data.id);
+            
+          console.log(`[Geocoding-BG] Async resolved "${locationToGeocode}" to ${bgLat}, ${bgLon} for ticket ${ticketNumber}`);
+        }
+      } catch (err) {
+        console.error('[Geocoding-BG] Failed to fetch coordinates in background:', err.message);
+      }
+    })();
   }
 
-  console.log('[Tickets] Created ticket:', data.ticket_number);
   return data;
 }
 
@@ -165,4 +226,5 @@ module.exports = {
   createTicket,
   lookupTicket,
   updateTicketStatus,
+  reverseGeocode,
 };

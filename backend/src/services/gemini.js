@@ -63,10 +63,14 @@ const classificationSchema = {
     },
     summary: {
       type: SchemaType.STRING,
-      description: 'A single-sentence summary of the complaint suitable for an officer dashboard',
+      description: 'A single-sentence summary of the issue itself. DO NOT include any location details or addresses in this summary.',
+    },
+    broad_location: {
+      type: SchemaType.STRING,
+      description: 'CRITICAL: Return ONLY the broad neighborhood or locality name and city (e.g., "Vaishnavi Nagar, Chennai"). You MUST strip out ALL house numbers, street names, cross roads, and pin codes. If you include a street or house number, the map will fail.',
     },
   },
-  required: ['issue_type', 'department', 'location', 'urgency', 'sentiment', 'summary'],
+  required: ['issue_type', 'department', 'location', 'urgency', 'sentiment', 'summary', 'broad_location'],
 };
 
 const CLASSIFICATION_PROMPT = `You are a government complaint classification system. Analyze the following citizen complaint (which may be a call transcript or a typed message) and extract structured information.
@@ -75,9 +79,10 @@ Rules:
 - Department MUST be exactly one of: ${VALID_DEPARTMENTS.join(', ')}
 - If the complaint doesn't clearly match a specific department, use "General Grievance"
 - Urgency should be "urgent" only for genuinely dangerous situations (flooding, fire, electrocution risk, gas leak, medical emergency, violence)
-- Location should be extracted as-is from the text; use "Not specified" if none mentioned
-- Summary should be one clear sentence an officer can scan quickly
-- Sentiment reflects the citizen's emotional tone, not the severity of the issue
+- Location should be extracted as-is from the text for the official record; use "Not specified" if none mentioned
+- broad_location must be a simplified, highly geocodable locality name (e.g. "T Nagar, Chennai")
+- Summary should be one clear sentence describing ONLY the issue. DO NOT include the address/location in the summary!
+- Sentiment reflects the citizen's emotional tone. If the user mentions long delays (e.g., "for a week", "still not done", "again"), you MUST classify them as "frustrated" even if they don't use angry words.
 
 Citizen complaint:
 `;
@@ -193,6 +198,7 @@ function keywordFallbackClassify(text) {
     urgency,
     sentiment,
     summary,
+    broad_location: 'Chennai', // Fallback
   };
 }
 

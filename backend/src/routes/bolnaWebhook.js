@@ -15,6 +15,7 @@ const router = express.Router();
 const supabase = require('../supabase');
 const { classifyComplaint } = require('../services/gemini');
 const { checkDuplicate, createTicket } = require('../services/tickets');
+const { setState } = require('../telegram/userState');
 
 // Lazy-loaded bot reference — set by index.js after bot is initialized
 let bot = null;
@@ -127,11 +128,13 @@ async function processCallResult(callRequest, callStatus, transcript, recordingU
     return;
   }
 
-  // Mark call_requests as completed
-  await supabase
+  // Mark call_requests as completed in the background (no await to save latency)
+  supabase
     .from('call_requests')
     .update({ status: 'completed' })
-    .eq('id', callRequestId);
+    .eq('id', callRequestId)
+    .then(() => console.log(`[BolnaWebhook] Call request ${callRequestId} marked completed`))
+    .catch(err => console.error('[BolnaWebhook] Failed to update call status:', err.message));
 
   // Edge case: empty or very short transcript → create an incomplete ticket for manual review
   if (!transcript || transcript.trim().length < 20) {
@@ -172,8 +175,7 @@ async function processCallResult(callRequest, callStatus, transcript, recordingU
     return;
   }
 
-  // Classify the transcript using Gemini (with automatic fallback to keyword rules)
-  // classifyComplaint never throws — it always returns a result with classified_by: 'ai' | 'rules'
+  // Classify transcript via Gemini (await)
   const classification = await classifyComplaint(transcript);
 
   // Check for duplicate tickets
@@ -210,6 +212,20 @@ async function processCallResult(callRequest, callStatus, transcript, recordingU
       `ℹ️ A similar complaint (${existingTicket.ticket_number}) is already being tracked in this area — your report has been linked to it.\n\n` +
       `Use /status ${ticket.ticket_number} to check updates.`
     );
+    
+    // Request GPS Location for the ticket
+    setState(telegram_chat_id, { mode: 'awaiting_ticket_location', ticketId: ticket.id });
+    await safeSendMessage(
+      telegram_chat_id,
+      `📍 To help our team find the exact spot, please share the location of the issue:`,
+      {
+        reply_markup: {
+          keyboard: [[{ text: '📍 Share Location', request_location: true }]],
+          resize_keyboard: true,
+          one_time_keyboard: true,
+        }
+      }
+    );
   } else {
     // Create a fresh ticket
     const ticket = await createTicket({
@@ -238,6 +254,20 @@ async function processCallResult(callRequest, callStatus, transcript, recordingU
       `Department: ${classification.department}\n` +
       `Summary: ${classification.summary}\n\n` +
       `Use /status ${ticket.ticket_number} to check updates.`
+    );
+    
+    // Request GPS Location for the ticket
+    setState(telegram_chat_id, { mode: 'awaiting_ticket_location', ticketId: ticket.id });
+    await safeSendMessage(
+      telegram_chat_id,
+      `📍 To help our team find the exact spot, please share the location of the issue:`,
+      {
+        reply_markup: {
+          keyboard: [[{ text: '📍 Share Location', request_location: true }]],
+          resize_keyboard: true,
+          one_time_keyboard: true,
+        }
+      }
     );
   }
 }
